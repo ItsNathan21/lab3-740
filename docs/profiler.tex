@@ -1,0 +1,2595 @@
+% ============================================================================
+%  profiler.tex -- Reference manual for profiler.py, the SM8850P
+%  heterogeneous profiler wrapper API.
+%
+%  Compile with:  pdflatex profiler.tex   (twice, for the ToC / refs)
+%  Only standard TeX Live / Overleaf packages are used; no shell-escape.
+%
+%  Revision 2.0 supersedes the SM8750 edition. The board changed
+%  (SM8750 -> SM8850P) and the API grew: hardware counters, threading,
+%  power estimation, converted networks, custom kernels, and eight more
+%  workloads. See docs/board-migration-sm8750-to-sm8850.md.
+% ============================================================================
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}
+\usepackage{textcomp}
+\usepackage{amsmath}
+\usepackage[margin=1in]{geometry}
+\usepackage{microtype}
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{array}
+\usepackage{xcolor}
+\usepackage{listings}
+\usepackage{enumitem}
+\usepackage{fancyhdr}
+\usepackage[hidelinks]{hyperref}
+
+% ---------------------------------------------------------------- colours ---
+\definecolor{codebg}{RGB}{247,247,249}
+\definecolor{coderule}{RGB}{220,220,226}
+\definecolor{kw}{RGB}{0,90,160}
+\definecolor{cmt}{RGB}{110,120,130}
+\definecolor{str}{RGB}{150,60,40}
+
+% --------------------------------------------------------------- listings ---
+\lstdefinestyle{py}{
+  language=Python,
+  basicstyle=\ttfamily\footnotesize,
+  keywordstyle=\color{kw}\bfseries,
+  commentstyle=\color{cmt}\itshape,
+  stringstyle=\color{str},
+  backgroundcolor=\color{codebg},
+  frame=single,
+  rulecolor=\color{coderule},
+  framesep=5pt,
+  showstringspaces=false,
+  columns=fullflexible,
+  keepspaces=true,
+  breaklines=true,
+  breakatwhitespace=true,
+  xleftmargin=0pt,
+  aboveskip=8pt,
+  belowskip=8pt,
+}
+\lstdefinestyle{sh}{
+  basicstyle=\ttfamily\footnotesize,
+  backgroundcolor=\color{codebg},
+  frame=single,
+  rulecolor=\color{coderule},
+  framesep=5pt,
+  showstringspaces=false,
+  columns=fullflexible,
+  keepspaces=true,
+  breaklines=true,
+  aboveskip=8pt,
+  belowskip=8pt,
+}
+\lstdefinestyle{plain}{
+  basicstyle=\ttfamily\scriptsize,
+  backgroundcolor=\color{white},
+  frame=none,
+  columns=fullflexible,
+  keepspaces=true,
+  aboveskip=6pt,
+  belowskip=6pt,
+}
+\lstset{style=py}
+
+% ---------------------------------------------------------------- helpers ---
+% Long identifiers may break after an underscore instead of running into the margin.
+\newcommand{\code}[1]{\texttt{\let\_\breakableunderscore #1}}
+\newcommand{\breakableunderscore}{\textunderscore\allowbreak}
+\setlength{\emergencystretch}{3em}
+\newcommand{\us}{$\mu$s}
+\newcommand{\arrow}{$\rightarrow$}
+\newcommand{\apient}[1]{\subsection{\texttt{#1}}}
+
+% ----------------------------------------------------------------- header ---
+\pagestyle{fancy}
+\fancyhf{}
+\lhead{\small SM8850P Profiler Wrapper API}
+\rhead{\small \thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+
+\title{\vspace{-1.5cm}\textbf{The SM8850P Profiler Wrapper API}\\[0.3cm]
+       \large A dispatch, counter and measurement interface for the four compute
+       engines\\ of the Qualcomm Snapdragon 8 Elite Gen 5 (SM8850P)}
+\author{Snapdragon Profiler project --- \code{profiler.py}}
+\date{Document revision 2.0}
+
+\begin{document}
+\maketitle
+\thispagestyle{fancy}
+
+\begin{abstract}
+\noindent
+\code{profiler.py} is a single-file, standard-library-only Python API that
+dispatches benchmark kernels to a Qualcomm HDK8850 board over \code{adb} and
+returns parsed, comparable measurements. It exposes twelve workloads across
+four compute engines (CPU, GPU, DSP, NPU) behind one uniform call; collects
+ARMv9 hardware performance counters alongside any CPU dispatch; runs converted
+neural networks through QNN; estimates total-board power from a calibrated
+model; and supports serial execution, genuine hardware-parallel execution, and
+dependency-ordered DAG execution.
+
+This document is the complete reference: every class, every argument, every
+field, and the measurement caveats that decide whether a number you get back is
+trustworthy. It is written to be read in order once and then used as a lookup.
+
+\medskip
+\noindent\textbf{One standing warning about catalogues.} The kernel and
+parameter tables reproduced here are hand-maintained and can lag the code.
+\code{python profiler.py -{}-catalogue} and \code{python profiler.py
+-{}-list-counters} are \emph{generated from the registry at runtime} and are
+therefore always current. Where this document and those commands disagree,
+the commands are right.
+\end{abstract}
+
+\tableofcontents
+\newpage
+
+% ============================================================================
+\section{Overview}
+% ============================================================================
+
+\subsection{What this is}
+
+The Snapdragon Profiler project builds and characterises benchmark kernels for
+the SM8850P SoC. Underneath, every measurement is an on-device binary invoked
+over \code{adb} with a backend-specific working directory, library path,
+affinity mask, privilege wrapper and flag set, whose stdout is then scraped for
+timing fields that differ per backend.
+
+\code{profiler.py} is the API over that machinery. It turns
+
+\begin{lstlisting}[style=sh]
+adb shell "cd /data/local/tmp/profiler-kernels/npu && LD_LIBRARY_PATH=... \
+  ADSP_LIBRARY_PATH=... ./conv_qnn_fp16 --perf-mode sustained --reps 5 --cin 8 --cout 8"
+\end{lstlisting}
+
+\noindent into
+
+\begin{lstlisting}
+p.run(convolution(Backend.NPU, cin=8, cout=8))
+\end{lstlisting}
+
+\noindent and returns a \code{Result} whose \code{compute\_us}, \code{gflops}
+and \code{gbps} fields mean the same thing regardless of which engine produced
+them.
+
+\subsection{The hardware it targets}
+\label{sec:hardware}
+
+The course hardware is the \textbf{HDK8850}, and several numbers in the API
+are properties of that part rather than of the software.
+
+\begin{longtable}{@{}p{2.6cm}p{12.2cm}@{}}
+\toprule
+\textbf{Unit} & \textbf{What the API assumes about it} \\
+\midrule
+\endhead
+SoC & SM8850P, ``Snapdragon 8 Elite Gen 5'', codename \code{canoe}, SoC ID 661.
+  Android 16, userdebug, \code{su 0} available. \\
+CPU & Oryon-2, 6 Gold + 2 Prime. \textbf{Gold is cores 0--5} (28-point OPP
+  ladder topping out at 3.6288\,GHz); \textbf{Prime is cores 6--7} (27 points to
+  4.3968\,GHz). The two ladders share only four setpoints. These ceilings are
+  hard-coded as \code{CLUSTER\_MAX\_GHZ} and used to flag under-clocked runs
+  (\S\ref{sec:clock}). \\
+GPU & Adreno 840, OpenCL, 18 power levels from 160\,MHz to 1.2\,GHz. GPU
+  hardware perfcounters are \emph{not} readable on this build; the GPU reports
+  \code{CL\_PROFILING} durations only. \\
+DSP & Hexagon cDSP v81, 8 HVX contexts, 8\,MB VTCM, reached over FastRPC. \\
+NPU & Hexagon HTP, driven through QAIRT/QNN 2.40. Shares the Hexagon subsystem
+  with the DSP, which has consequences for parallelism (\S\ref{sec:parallel}). \\
+\bottomrule
+\end{longtable}
+
+\noindent \textbf{The Prime ceiling is 4.3968\,GHz, not 4.608.} The sysfs node
+\code{cpuinfo\_max\_freq} reports 4608000 and the governor will accept it, but
+that setpoint is absent from \code{scaling\_available\_frequencies}, the
+effective clock only reaches about 3.8--3.9\,GHz there, and under sustained load
+the governor settles to 4.34. 4.3968 is the fastest setpoint that can actually
+be selected and held, so it is the one the API compares against.
+
+\subsection{Why it is called an API}
+
+The name is accurate in the ordinary sense: it is a programmatic interface with
+a small, stable vocabulary of objects (\code{Task}, \code{Result},
+\code{Profiler}, \code{Device}, \code{Backend}) that hides a transport and a
+parsing layer behind method calls. Callers write Python against those objects;
+they never construct shell strings, never touch \code{adb}, and never write a
+per-backend output parser. Swapping the engine a workload runs on is a
+one-token change, which is precisely the property an interface is supposed to
+give you.
+
+It is a \emph{host-side} API: it is imported into a Python process on your
+workstation, and the boundary it wraps is the USB link to the board, not a
+network service. There is no server and no HTTP.
+
+\subsection{Design commitments}
+
+\begin{description}[leftmargin=1.6cm,style=nextline,font=\normalfont\itshape]
+  \item[Uniform, not lossy.] Every backend reports through the same
+    \code{Result} shape, but nothing is averaged away or hidden. Every
+    \code{key=value} token the kernel printed survives in \code{Result.fields}
+    and the untouched stdout survives in \code{Result.raw}.
+  \item[Tool, not agent.] The API does exactly what it is told. It never picks
+    a variant for you, never retries, never warms up behind your back, never
+    tunes, and never flags an anomaly. Defaults exist so a call is short; they
+    are documented here, printed by \code{-{}-catalogue}, and visible in the
+    command it builds (\code{verbose=True}).
+  \item[Costs stay visible.] Backend-native compute time and host-side
+    transport are reported as separate fields. The NPU's graph-compile time,
+    the GPU's host-to-device copy and the DSP's FastRPC marshalling are not
+    folded into the headline number.
+  \item[Real concurrency.] Parallel execution is genuine simultaneous hardware
+    use, not interleaving. See \S\ref{sec:parallel}.
+  \item[Fail early, on the host.] A mistyped variant, an impossible size, or
+    \code{threads=} on a kernel that cannot take it raises \code{ValueError} at
+    \code{Task} construction --- not on the device three dispatches into a
+    sweep. The messages name the valid alternatives.
+  \item[Refuse rather than guess.] Where a number cannot be produced honestly
+    the API says so. \code{power()} returns \code{available: False} with a
+    reason for the DSP rather than inventing watts; a counter this silicon does
+    not implement raises instead of returning the silent zero the hardware
+    would give you.
+  \item[Standalone.] The module depends only on the Python standard library and
+    an \code{adb} on \code{PATH}. It does not require the control container,
+    the storage stack, or the orchestrator.
+\end{description}
+
+\subsection{What it deliberately does not do}
+
+It does not build or push kernels (see \S\ref{sec:install}), does not persist
+results to the project's Parquet/SQLite store, does not capture Perfetto
+traces, does not read GPU, DSP or NPU hardware counters (only CPU PMU counters,
+\S\ref{sec:counters}), and does not measure energy directly --- there is no
+readable power rail on this board, so \code{power()} is a fitted model and says
+so (\S\ref{sec:power}). It is the dispatch and measurement front door; the
+heavier subsystems live elsewhere in the repository.
+
+% ============================================================================
+\section{Installation and prerequisites}
+\label{sec:install}
+% ============================================================================
+
+\subsection{Requirements}
+
+\begin{longtable}{@{}p{4.2cm}p{10.5cm}@{}}
+\toprule
+\textbf{Requirement} & \textbf{Notes} \\
+\midrule
+\endhead
+Python 3.10 or newer & The module uses PEP 604 unions (\code{float | None})
+  and builtin generics. 3.9 will fail to import. No \code{pip install} is
+  needed: the module imports only from the standard library. \\
+\code{adb} on \code{PATH} & Any recent platform-tools. Verify with
+  \code{adb devices}; exactly one device should be listed, or pass a serial
+  explicitly. Version 30 or newer is recommended --- an \code{adb} older than
+  the device's \code{adbd} negotiates badly. \\
+An HDK8850 (SM8850P) board & Connected over USB-C, in \code{device} state, with
+  USB debugging authorised. TCP transport works too if \code{adb connect} has
+  already been done. \\
+Kernels present on device & The prebuilt binaries must exist under
+  \code{/data/local/tmp/profiler-kernels}. \\
+\code{su 0} on the device & Required \emph{only} for hardware counters
+  (\S\ref{sec:counters}). Everything else runs at shell uid. \\
+\bottomrule
+\end{longtable}
+
+\subsection{Provisioning the device}
+
+The wrapper assumes the kernel tree already sits on the board. Push it with the
+project's provisioner, which also verifies five functional gates before it
+reports success:
+
+\begin{lstlisting}[style=sh]
+python scripts/provision_device.py \
+    --qairt-root "<path>/qairt/2.40.0.251030" \
+    --dsp-skel   kernels/matmul/dsp/prebuilt/libdsp_matmul_skel.so
+python scripts/verify_board.py        # expect: 0 fail -> BOARD OK.
+\end{lstlisting}
+
+\noindent To go the other way --- put the board back to unprovisioned, so
+the setup path can be tested from scratch --- use \code{scripts/reset\_device.py}.
+It reports what it would delete and requires \code{-{}-yes} before
+removing anything. \textbf{Rebooting does not do this}: \code{/data} is f2fs
+on a real block device, so \code{/data/local/tmp} survives a reboot and
+the kernels are still there afterwards.
+
+\noindent Provisioning is idempotent: re-running after a failure is the
+normal remedy.
+
+\noindent The expected on-device layout is:
+
+\begin{lstlisting}[style=plain]
+/data/local/tmp/profiler-kernels/
+    matmul_neon_handtuned, matmul_eigen_baseline   <- CPU matmul at the base
+    gpu/         matmul_opencl_*                   + libs (LD_LIBRARY_PATH=".")
+    dsp/         *_dsp*, stubs and skels           (FastRPC)
+    npu/         *_qnn_*                           + QNN backend libraries
+    saxpy/       saxpy_scalar, saxpy_neon, saxpy_opencl_fp32
+    reduction/   reduction_scalar, reduction_neon, reduction_opencl_fp32
+    convolution/ conv_scalar, conv_neon, conv_int8_neon, conv_opencl_fp32
+    nbody/       nbody_neon, nbody_opencl_fp32
+    decode/      decode_neon, decode_opencl_fp32, decode_opencl_gemv
+    cachelat/    cache_latency
+    memlab/      gpu_memlab
+    custom/      whatever you build yourself
+/data/local/tmp/
+    mnv2/  nlp/  qwen/  llama/  sd15/               <- converted networks (DLCs)
+\end{lstlisting}
+
+\noindent If a binary is missing, the corresponding call fails with a shell
+error in \code{Result.error} rather than raising. Networks are staged
+separately and are not part of provisioning; see \S\ref{sec:models}.
+
+\subsection{Smoke test}
+
+\begin{lstlisting}[style=sh]
+python profiler.py --demo
+\end{lstlisting}
+
+\noindent This runs a short live tour: a connectivity check, one convolution on
+all four backends in parallel, an NPU roofline inversion pair, a CPU affinity
+comparison, a hardware-counter comparison at one and six threads, and a small
+dependency DAG. If the demo prints results, the API is correctly wired to your
+board.
+
+% ============================================================================
+\section{Quick start}
+% ============================================================================
+
+\begin{lstlisting}
+from profiler import Profiler, Backend, matmul, saxpy, reduction, convolution
+
+p = Profiler()                                   # uses the only attached device
+
+# 1. One dispatch.
+r = p.run(convolution(Backend.NPU, cin=8, cout=8))
+print(r.summary())
+print(r.compute_us, r.gflops, r.fields["finalize_us"])
+
+# 2. The same workload on every engine, at the same time.
+for r in p.run_parallel([convolution(b, cin=8, cout=8) for b in Backend]):
+    print(r.summary())
+
+# 3. The same batch, strictly one at a time (clean, uncontended numbers).
+for r in p.run_serial([convolution(b, cin=8, cout=8) for b in Backend]):
+    print(r.summary())
+
+# 4. Hardware counters riding along with a CPU dispatch.
+r = p.run(convolution(Backend.CPU, cin=32, cout=32,
+                      threads=6, core="gold",          # where, and how many
+                      counters="cache", per_core=True))
+print(r.derived["ipc"], r.derived["l1d_miss_pct"])
+print(r.counter_table())
+
+# 5. Dependency order: warm up on CPU, then fan out to GPU and NPU.
+results = p.run_dag([
+    reduction(Backend.CPU, size=1 << 20, name="warmup"),
+    convolution(Backend.GPU, cin=16, cout=16, name="gpu", depends_on=["warmup"]),
+    convolution(Backend.NPU, cin=16, cout=16, name="npu", depends_on=["warmup"]),
+])
+print(results["npu"].summary())
+\end{lstlisting}
+
+\noindent Everything else in this document is detail on those five calls, plus
+two subsystems that stand slightly apart: converted networks
+(\S\ref{sec:models}) and power estimation (\S\ref{sec:power}).
+
+% ============================================================================
+\section{Execution model}
+% ============================================================================
+
+\subsection{The path of one dispatch}
+
+\begin{lstlisting}[style=plain]
+  Task(workload, backend, params, variant, core, threads, counters, ...)
+        |
+        |  1. registry lookup: WORKLOADS[workload].kernels[backend] -> KernelEntry
+        |  2. variant -> binary name (or a --variant flag, DSP and nbody-GPU)
+        |  3. entry.defaults overlaid with task.params       (task wins)
+        |  4. entry.param_map renames keys the kernel spells differently
+        |  5. params -> CLI flags   (perf_mode="sustained" -> --perf-mode sustained)
+        |  6. backend prologue: cd / LD_LIBRARY_PATH / ADSP_LIBRARY_PATH / taskset
+        |  7. if counters: prepend `simpleperf stat --csv -e ...`
+        |                  and wrap the WHOLE command in `su 0 sh -c '...'`
+        v
+  build_command(task, base)  ->  one shell string
+        |
+        v
+  Device.shell(cmd, timeout)  ->  adb [-s SERIAL] shell "<cmd>"   (blocking)
+        |
+        v
+  stdout scraped twice:  key=value / "key: value"  -> Result.fields
+                         simpleperf --csv rows      -> Result.counters/.per_core
+        |
+        v
+  Result(ok, compute_us, wall_us, gflops, gbps, fingerprint, fields,
+         counters, derived, per_core, raw)
+\end{lstlisting}
+
+\noindent One \code{Task} is exactly one process on the device. Nothing is
+batched, cached or reordered. The two parsers read the same stream without
+colliding, because simpleperf's CSV rows are comma-separated and the kernels'
+output is not.
+
+\subsection{Backend command construction}
+
+Each engine needs a different environment. The API applies it for you:
+
+\begin{longtable}{@{}p{1.6cm}p{13.1cm}@{}}
+\toprule
+\textbf{Backend} & \textbf{Command shape} \\
+\midrule
+\endhead
+CPU & \code{taskset <mask> <base>/<subdir>/<binary> <flags>} \newline
+  The affinity mask comes from \code{Task.core} (\S\ref{sec:affinity}). \\
+GPU & \code{cd <dir> \&\& LD\_LIBRARY\_PATH=<ldpath> ./<binary> <flags>} \newline
+  Adreno matmul and decode ship their libraries beside the binary
+  (\code{ldpath="."}); the other GPU kernels use \code{/vendor/lib64}. \\
+DSP & \code{cd <dir> \&\& LD\_LIBRARY\_PATH=. ADSP\_LIBRARY\_PATH='.;<dir>' ./<binary> <flags>} \newline
+  FastRPC needs the stub next to the working directory and the skel on the
+  DSP's library path. \\
+NPU & \code{cd <dir> \&\& LD\_LIBRARY\_PATH=<dir> ADSP\_LIBRARY\_PATH=<dir> ./<binary> <flags>} \newline
+  QNN resolves its HTP backend libraries from those paths. \\
+model & \code{cd <modeldir> \&\& rm -rf <out> \&\& LD\_LIBRARY\_PATH=<modeldir> \dots{}
+  ./qnn-net-run -{}-dlc\_path \dots{} -{}-backend libQnn\{Cpu,Gpu,Htp\}.so \dots} \newline
+  Networks bypass the kernel tree entirely (\S\ref{sec:models}). \\
+\bottomrule
+\end{longtable}
+
+\noindent Pass \code{verbose=True} to the \code{Profiler} to print each command
+before it runs --- the fastest way to confirm what the API actually did --- or
+call \code{build\_command} to get the string without a board attached.
+
+\subsection{Privilege: why counters run under \texttt{su 0}}
+\label{sec:su}
+
+When, and only when, counters are requested, the entire command is re-wrapped:
+
+\begin{lstlisting}[style=sh]
+su 0 sh -c '<the command that would otherwise have run>'
+\end{lstlisting}
+
+On this board the shell domain cannot open the PMU. \code{simpleperf} answers
+\emph{``Event type `cpu-cycles' is not supported on the device''} for every
+event, including ones \code{simpleperf list} advertises, while the identical
+command under \code{su 0} counts normally. \code{perf\_event\_paranoid} is
+already \code{-1}, so this is an SELinux domain restriction, not a paranoia
+level.
+
+\textbf{This is not \code{adb root}, and the difference matters.} \code{su 0}
+elevates one command from an unrooted \code{adbd}. \code{adb root} restarts
+\code{adbd} itself in a domain that cannot reach the OpenCL driver, which
+breaks every GPU dispatch --- \code{clGetPlatformIDs} returns \code{-1001}, no
+platform. Never run \code{adb root} on this board while profiling; the API is
+careful not to need it.
+
+\subsection{Serial, parallel, and DAG semantics}
+\label{sec:parallel}
+
+\begin{description}[leftmargin=1.8cm,style=nextline,font=\normalfont\itshape]
+  \item[Serial] Tasks run strictly one after another. Nothing else the API
+    controls is on the machine while a measurement is taken. Use this for any
+    number you intend to quote.
+  \item[Parallel] Every task is launched on its own host thread, so $N$ blocking
+    \code{adb shell} invocations are in flight at once. The CPU cluster, the
+    Adreno GPU and the Hexagon subsystem are independent hardware, so tasks on
+    those genuinely execute simultaneously. Tasks on the \emph{same} backend
+    contend --- that contention is real and measurable, and is often the point,
+    but it is not a clean single-engine number.
+
+    \textbf{One exception, and it is not visible from the host: NPU and DSP do
+    not run in parallel.} They are two software paths --- QNN HTP and FastRPC ---
+    onto the \emph{same} Hexagon cDSP, so they serialise in hardware. Submitting
+    both concurrently looks correct from here: the dispatches go out together and
+    their host-side windows overlap. The cDSP runs them one after the other
+    anyway. Measured in Discovery~50, which found NPU+DSP to be the sole
+    \textsc{hw-serialize} pair in the nine-pair matrix; first caught when a
+    \code{wait\_any([dsp, npu])} returned the DSP result while the NPU sat
+    blocked behind cDSP warm-up. Effective width is four independent paths, or
+    three whenever NPU and DSP are both in play. Do not read an NPU+DSP parallel
+    batch as a speed-up measurement.
+
+    \textbf{The same sharing cuts the other way.} A busy NPU raises the Hexagon
+    DVFS operating point, and the DSP --- which cannot vote for its own clock on
+    this board (\S\ref{sec:dspclock}) --- is carried along with it. A DSP kernel
+    measured next to an NPU peer can be \emph{faster} than the same kernel
+    measured alone (Discovery~75: 1.59$\times$). Every DSP figure in this
+    project is therefore the idle-Hexagon case, and ``isolation'' is not the
+    cleanest measurement on this engine.
+  \item[DAG] Tasks are grouped into levels: every task whose dependencies have
+    completed runs in the same parallel batch, then the next level starts. A
+    task never starts before its dependencies finish. Cycles and unknown
+    dependency names raise \code{ValueError} before anything is dispatched.
+\end{description}
+
+\noindent Wall-clock overlap in parallel mode is host-scheduled, so start times
+are not synchronised to the microsecond. For tightly-coupled interference
+studies, use longer per-kernel iteration counts so the overlap window dominates
+the launch skew.
+
+% ============================================================================
+\section{API reference}
+% ============================================================================
+
+% ----------------------------------------------------------------------------
+\apient{Backend}
+
+An \code{Enum} of the four compute engines. \code{str(Backend.CPU) == "cpu"},
+and the enum is iterable, so \code{for b in Backend} sweeps all four.
+
+\begin{longtable}{@{}llp{9.4cm}@{}}
+\toprule
+\textbf{Member} & \textbf{Value} & \textbf{Hardware and native timing source} \\
+\midrule
+\endhead
+\code{Backend.CPU} & \code{"cpu"} & Oryon-2 cores, affinity via \code{taskset};
+  self-timed \code{wall\_us} or \code{mean\_us}. \\
+\code{Backend.GPU} & \code{"gpu"} & Adreno 840, OpenCL; \code{CL\_PROFILING}
+  \code{duration\_ns}. \\
+\code{Backend.DSP} & \code{"dsp"} & Hexagon cDSP v81, FastRPC + HVX;
+  on-DSP \code{dsp\_us}. \\
+\code{Backend.NPU} & \code{"npu"} & Hexagon HTP via QNN; \code{execute\_us\_mean}
+  plus a separate \code{finalize\_us}. \\
+\bottomrule
+\end{longtable}
+
+\noindent Not every workload exists on every backend. \code{nbody} is CPU and
+GPU only; \code{cachelat} is CPU only; \code{gpu\_memlab} is GPU only; \code{decode} and \code{model} skip the
+DSP. Asking for a pair that does not exist raises \code{ValueError} naming the
+backends that do.
+
+% ----------------------------------------------------------------------------
+\apient{Task}
+\label{sec:task}
+
+A description of one dispatch. Constructing a \code{Task} performs no I/O; it
+validates the workload/backend pair, the variant, the size, the thread request
+and the counter selection, then assigns a name.
+
+\begin{lstlisting}
+Task(workload: str,
+     backend: Backend,
+     params: dict = {},
+     variant: str | None = None,
+     name: str | None = None,
+     timeout: float = 180.0,
+     depends_on: list[str] = [],
+     core: object = None,
+     threads: int | None = None,
+     counters: object = None,
+     per_core: bool = False,
+     counter_cpus: object = None,
+     binary: str | None = None)
+\end{lstlisting}
+
+\begin{longtable}{@{}p{2.6cm}p{2.5cm}p{9.6cm}@{}}
+\toprule
+\textbf{Field} & \textbf{Type} & \textbf{Meaning} \\
+\midrule
+\endhead
+\code{workload} & \code{str} & A key of \code{WORKLOADS}: \code{"matmul"},
+  \code{"saxpy"}, \code{"reduction"}, \code{"convolution"}, \code{"nbody"},
+  \code{"decode"}, \code{"cachelat"}, \code{"morph"}, \code{"gpu\_memlab"}, \code{"custom"}, \code{"model"}. Unknown values raise
+  \code{ValueError} listing the known ones. \\
+\code{backend} & \code{Backend} & Which engine. A pair with no kernel raises
+  \code{ValueError} naming the backends that workload does have. \\
+\code{params} & \code{dict} & Kernel parameters, passed through as CLI flags
+  (\S\ref{sec:params}). \\
+\code{variant} & \code{str | None} & Which kernel implementation
+  (\S\ref{sec:catalogue}). \code{None} selects the entry's default. A name that
+  does not exist raises \code{ValueError} listing every valid variant, the
+  default, and --- when the typo is close to a real name --- a
+  ``did you mean'' line. \\
+\code{name} & \code{str | None} & Identifier used by \code{run\_dag} and printed
+  by \code{Result.summary()}. Defaults to
+  \code{"<workload>.<backend>[.<variant>]"}. Must be unique within a DAG. \\
+\code{timeout} & \code{float} & Seconds before the \code{adb} call is abandoned
+  and the task fails with exit code 124. Raise it for NPU work
+  (\S\ref{sec:caveats}). \\
+\code{depends\_on} & \code{list[str]} & Names of tasks that must complete first.
+  Only consulted by \code{run\_dag}. \\
+\code{core} & see \S\ref{sec:affinity} & CPU affinity: \emph{where} the work is
+  allowed to run. Ignored on non-CPU backends. \\
+\code{threads} & \code{int | None} & \emph{How many} worker threads the kernel
+  spawns, passed as \code{-{}-threads N}. Only accepted by threaded variants
+  (\S\ref{sec:threads}). \\
+\code{counters} & see \S\ref{sec:counters} & CPU hardware counters to collect
+  alongside the dispatch. \code{None} means none. \\
+\code{per\_core} & \code{bool} & Break the counter totals down per CPU
+  (\code{simpleperf -{}-per-core}). Only meaningful with \code{counters}. \\
+\code{counter\_cpus} & \code{int | list | str | None} & Count \emph{per-CPU and
+  system-wide} on these CPUs instead of per-process. See
+  \S\ref{sec:countercpus}. \\
+\code{binary} & \code{str | None} & Dispatch this device binary instead of
+  looking one up in the registry. Used by \code{custom()}
+  (\S\ref{sec:custom}). \\
+\bottomrule
+\end{longtable}
+
+\subsubsection*{Read-only properties}
+
+\begin{longtable}{@{}p{3.4cm}p{11.4cm}@{}}
+\toprule
+\textbf{Property} & \textbf{Value} \\
+\midrule
+\endhead
+\code{task.entry} & The \code{KernelEntry} this task resolves to: device
+  subdirectory, variant table, always-on flags. \\
+\code{task.resolved\_variant} & The variant that will actually run ---
+  \code{variant} if given, else the registry default. Worth checking: defaults
+  are deliberately \emph{not} the fastest variant, so that the naive/optimised
+  gap stays visible. \\
+\code{task.counter\_events} & The flat, deduplicated event list that
+  \code{counters} resolves to. Recomputed on every access, so assigning
+  \code{task.counters = "stalls"} after construction takes effect. \\
+\code{task.cores} & The list of CPU ids the affinity mask actually permits,
+  e.g.\ \code{[6, 7]} for \code{core="prime"}. \\
+\code{task.oversubscribed} & \code{True} when \code{threads} exceeds
+  \code{len(task.cores)} --- more workers than cores they are allowed on. This
+  is legal and measurable, not an error. \\
+\bottomrule
+\end{longtable}
+
+\subsubsection*{What is validated at construction}
+
+All five checks run before any I/O, so a sweep fails on line one rather than
+twenty minutes in:
+
+\begin{enumerate}[leftmargin=0.8cm]
+  \item the workload exists;
+  \item the workload has a kernel on that backend;
+  \item the variant exists on that entry;
+  \item \code{size} matches \code{fixed\_size} when the chosen variant is
+    compiled for exactly one shape (\S\ref{sec:fixedsize});
+  \item \code{threads} is $\geq 1$ \emph{and} the resolved variant is in
+    \code{threaded\_variants};
+  \item every requested counter is implemented on this silicon.
+\end{enumerate}
+
+\subsubsection*{Convenience constructors}
+
+Eight module-level functions build a \code{Task} without naming the workload
+string. Task-level keywords (\code{name}, \code{variant}, \code{depends\_on},
+\code{timeout}, \code{core}, \code{threads}, \code{counters}, \code{per\_core},
+\code{counter\_cpus}) are recognised and peeled off; \emph{every other keyword
+becomes a kernel parameter}.
+
+\begin{lstlisting}
+matmul(backend, **params)          -> Task   # dense square GEMM
+saxpy(backend, **params)           -> Task   # y = a*x + y
+reduction(backend, **params)       -> Task   # sum of floats
+convolution(backend, **params)     -> Task   # 2D conv
+nbody(backend, **params)           -> Task   # direct-summation N-body (CPU/GPU)
+decode(backend, **params)          -> Task   # weight-stationary GEMM
+custom(backend, binary, **params)  -> Task   # a kernel you wrote
+model(backend, name, **params)     -> Task   # a converted network
+
+# Equivalent:
+saxpy(Backend.CPU, size=1 << 20, variant="scalar", core="prime", name="s1")
+Task("saxpy", Backend.CPU, {"size": 1 << 20}, "scalar", "s1", core="prime")
+\end{lstlisting}
+
+\begin{longtable}{@{}p{2.3cm}p{12.5cm}@{}}
+\toprule
+\textbf{Constructor} & \textbf{What the workload is for} \\
+\midrule
+\endhead
+\code{matmul} & Dense square matmul, \code{size=N} (default 512). Arithmetic
+  intensity $\approx N/6$: the compute-bound end of the set. Variants differ
+  enormously --- GPU \code{best} is about 16$\times$ \code{naive}, CPU
+  \code{eigen} about 3$\times$ \code{neon}. \\
+\code{saxpy} & $y = ax + y$ over \code{size} floats (default 1M). AI 0.17 ---
+  the memory-bound end, and the workload where one CPU cluster beats the NPU by
+  about 50$\times$. \\
+\code{reduction} & Sum of \code{size} floats (default 4M). Memory-bound like
+  saxpy, \emph{but} the NPU has a native \code{ReduceSum} so it compiles in
+  milliseconds rather than seconds. The saxpy/reduction pair is a controlled
+  experiment in operator support, holding arithmetic intensity roughly fixed. \\
+\code{convolution} & 2D convolution over \code{cin}/\code{cout}/\code{H}/\code{W}/\code{k}.
+  AI $\approx 18$ at $C=8$, enough to feed the NPU's tensor cores: it wins by
+  about 68$\times$ over one CPU cluster. \\
+\code{nbody} & Direct-summation N-body, $O(N^2)$ arithmetic on $O(N)$ data, so
+  AI $= 1.25N$ and \emph{grows with the problem}. QNN cannot express it, so
+  this is the one workload where the GPU competes on equal terms. CPU and GPU
+  only, by design rather than omission. \\
+\code{decode} & Weight-stationary GEMM $C[S \times n] = A[S \times k] \cdot
+  W[k \times n]$ with the token count \code{tokens} exposed. That one knob
+  walks the workload across the roofline ridge: $S=1$ is LLM decode (every
+  weight read once, DRAM-bound), large $S$ is prefill (weights reused,
+  compute-bound). The ranking inverts across it --- at $S=1$ one CPU core beats
+  the NPU; at $S=256$ the NPU wins 29$\times$ (Discovery~66). \\
+\code{custom} & Your own kernel, by device filename. \S\ref{sec:custom}. \\
+\code{model} & A converted network through \code{qnn-net-run}.
+  \S\ref{sec:models}. \\
+\bottomrule
+\end{longtable}
+
+\noindent \textbf{Unrecognised keywords silently become flags.} A typo such as
+\code{sizee=1024} produces \code{-{}-sizee 1024} on the device rather than a
+Python error. Most kernels reject unknown flags and the task then fails, so
+check \code{Result.error} first when a call fails unexpectedly --- but some
+kernels ignore them, in which case you have quietly measured the kernel's
+\emph{default} instead of what you asked for. There is no way for the host to
+tell those two apart, which is why \code{verbose=True} is worth having on while
+you develop a sweep.
+
+% ----------------------------------------------------------------------------
+\apient{CPU affinity: the \texttt{core} argument}
+\label{sec:affinity}
+
+\code{core} decides \emph{where} work may run. It accepts four forms and is
+resolved to a \code{taskset} hexadecimal mask.
+
+\begin{longtable}{@{}p{3.6cm}p{1.6cm}p{9.5cm}@{}}
+\toprule
+\textbf{Form} & \textbf{Mask} & \textbf{Meaning} \\
+\midrule
+\endhead
+\code{None} (default) & \code{f0} & Cores 4--7. This is what the project's sweep
+  scripts use, so defaults reproduce the published roofline numbers.
+  \textbf{Read the note below before relying on it.} \\
+\code{core=7} & \code{80} & That one core. \\
+\code{core=[6, 7]} & \code{c0} & Those cores, OR-ed together. \\
+\code{core="prime"} & \code{c0} & Prime cluster, cores 6--7, up to 4.3968\,GHz. \\
+\code{core="gold"} & \code{3f} & Gold cluster, cores 0--5, up to 3.6288\,GHz. \\
+\code{core="all"} & \code{ff} & All eight cores. \\
+\code{core="0xc0"} / \code{"c0"} & as given & Raw mask, passed through
+  unchanged and not validated. \\
+\bottomrule
+\end{longtable}
+
+\noindent\textbf{The default mask straddles the cluster boundary.} On this SoC
+Gold is cores 0--5 and Prime is 6--7, so \code{f0} (cores 4, 5, 6, 7) permits
+\emph{two Gold cores and two Prime cores}. The scheduler may place a
+single-threaded kernel on either, and two runs with identical arguments can
+land on different clusters with a 1.13$\times$ clock difference between them.
+Two consequences:
+
+\begin{itemize}[leftmargin=0.6cm]
+  \item For a number you intend to quote, name the cluster explicitly:
+    \code{core="prime"} or \code{core="gold"}.
+  \item \code{clock\_of\_max\_pct} and \code{below\_max\_clock}
+    (\S\ref{sec:clock}) are computed \emph{only} when the mask lies entirely
+    inside one cluster, because only then is there an unambiguous ceiling to
+    compare against. Under the default mask they are silently absent.
+\end{itemize}
+
+\noindent Cluster membership is fixed for the SM8850P; masks are not
+re-derived at runtime.
+
+% ----------------------------------------------------------------------------
+\apient{Threading: the \texttt{threads} argument}
+\label{sec:threads}
+
+\code{threads=N} passes \code{-{}-threads N} to the kernel, asking it to spawn
+$N$ workers. It is independent of \code{core}, which only decides which CPUs
+those workers are \emph{allowed} on. Both are recorded, and the combination is
+free: six threads on a one-core mask is a legal, measurable experiment ---
+\code{task.oversubscribed} reports \code{True} and the kernel time-slices.
+
+\textbf{Threading is per-variant, not per-workload.} The binary either accepts
+the flag or hard-errors on it, and variants inside one registry entry differ:
+\code{conv\_neon} is threaded, \code{conv\_scalar} sits in the same entry and
+rejects \code{-{}-threads}. Asking for threads on a variant that cannot take
+them raises at construction and names the ones that can.
+
+\begin{longtable}{@{}p{3.2cm}p{11.6cm}@{}}
+\toprule
+\textbf{Workload} & \textbf{Threaded variants (CPU)} \\
+\midrule
+\endhead
+\code{matmul} & \code{neon}. \emph{Not} \code{eigen}. \\
+\code{saxpy} & \code{scalar}, \code{neon} \\
+\code{reduction} & \code{scalar}, \code{neon} \\
+\code{convolution} & \code{neon}, \code{int8}. \emph{Not} \code{scalar}. \\
+\code{nbody} & \code{neon} \\
+\bottomrule
+\end{longtable}
+
+\noindent \textbf{A trap worth knowing about matmul.} The CPU matmul spawns and
+joins its threads \emph{inside} the timed region, so a single-iteration run
+charges the whole thread-spawn cost to a short measurement --- and the shorter
+the region, the worse parallelism looks. Measured on Gold, matmul $N=512$
+scales 2.55$\times$ at one iteration and 4.11$\times$ at thirty. The registry
+therefore sends \code{-{}-iterations 10} by default for CPU matmul. If you are
+studying parallel efficiency, raise it further; if you lower it to 1 you will
+measure thread creation and call it poor scaling.
+
+% ----------------------------------------------------------------------------
+\apient{Hardware counters: \texttt{counters}, \texttt{per\_core}, \texttt{counter\_cpus}}
+\label{sec:counters}
+
+Any CPU dispatch can carry ARMv9 PMU counters, collected by \code{simpleperf}
+wrapped around the same command.
+
+The prefix is applied on \emph{every} backend, not only the CPU, and a GPU,
+DSP or NPU dispatch with counters succeeds. What comes back is the counters of
+the 	extbf{ARM process driving the accelerator}, not of the accelerator ---
+which is a useful measurement, and not the one people assume. See
+\S
+ef{sec:accelcounters}. There is no way to read Adreno or Hexagon hardware
+counters from this board at all.
+
+\begin{lstlisting}
+r = p.run(convolution(Backend.CPU, cin=32, cout=32, core="gold", threads=6,
+                      counters="cache", per_core=True))
+
+r.counters    # {'cpu-cycles': 1.9e10, 'raw-l1d-cache': 1.2e8, ...}  raw counts
+r.derived     # {'ipc': 2.91, 'l1d_miss_pct': 0.28, 'effective_ghz': 3.41, ...}
+r.per_core    # {0: {...}, 1: {...}, ...}  one dict per CPU
+print(r.counter_table())
+\end{lstlisting}
+
+\subsubsection*{\texttt{counters} --- what to collect}
+
+Accepts \code{None}, a preset name, a single event name, or a list mixing the
+two. Presets expand; duplicates collapse; order is preserved.
+
+\begin{longtable}{@{}p{1.9cm}p{1.1cm}p{11.6cm}@{}}
+\toprule
+\textbf{Preset} & \textbf{Events} & \textbf{What it answers} \\
+\midrule
+\endhead
+\code{basic} & 2 & Cycles and instructions --- IPC, and nothing else. The
+  cheapest way to get \code{effective\_ghz}. \\
+\code{branch} & 7 & Prediction accuracy, split by branch kind: direct, indirect
+  (the expensive kind), and returns. \\
+\code{cache} & 10 & L1D, L1I and L2 accesses, refills and writebacks. The
+  default choice for a memory-hierarchy question. \\
+\code{tlb} & 10 & L1/L2 TLB accesses and refills, plus page-table walks. \\
+\code{stalls} & 8 & Frontend vs backend stalls, in both cycles and issue slots,
+  plus memory-attributed backend stalls. \\
+\code{mix} & 9 & Instruction mix: retired vs speculative, loads, stores,
+  integer, and FP/SIMD. \\
+\code{memory} & 9 & Memory and bus accesses with the refills and memory stalls
+  that explain them. \\
+\code{prefetch} & 9 & Cache traffic split by who generated it --- the program or
+  the hardware prefetcher. \\
+\bottomrule
+\end{longtable}
+
+\noindent \code{python profiler.py -{}-list-counters} prints all eight presets,
+all 92 verified events grouped by subsystem, and all 43 blocked ones with the
+reason for each.
+
+\subsubsection*{The 12-counter limit}
+
+The Oryon-2 PMU has \textbf{12 hardware counters per core}
+(\code{MAX\_HW\_COUNTERS}). Up to twelve events are collected simultaneously and
+exactly. Ask for more and \code{simpleperf} time-multiplexes them: each event is
+counted for part of the run and scaled up, so the numbers become estimates.
+The API does not stop you --- multiplexing is sometimes the right trade --- but
+it sets \code{Result.multiplexed = True} and \code{summary()} prints
+\code{[multiplexed]}. Every shipped preset is $\leq$ 12 events, so presets never
+multiplex.
+
+\subsubsection*{Blocked counters, and why refusing beats returning zero}
+
+\code{simpleperf list raw} advertises 742 events on this part and \emph{none of
+them error}. The ones the silicon does not implement return a silent, confident
+\textbf{zero}. A zero is indistinguishable from a real measurement of nothing,
+so it is the most dangerous possible failure mode: you can build an entire
+argument on a counter that was never counting.
+
+The module therefore ships a whitelist. 92 events were each run against a
+memory-heavy workload on both clusters and returned non-zero; 43 more returned
+exactly zero and are blocked. Requesting a blocked event raises
+\code{ValueError} naming the reason:
+
+\begin{lstlisting}[style=plain]
+ValueError: counter 'raw-l3d-cache' reads a constant 0 on this board -- no
+L3/system-cache PMU: the SLC is invisible to the core PMU on this SoC (sysfs
+exposes only L1D/L1I/L2). It would not error on device, it would silently
+return 0.
+\end{lstlisting}
+
+\noindent The four blocked families, and what to use instead:
+
+\begin{longtable}{@{}p{4.3cm}p{10.4cm}@{}}
+\toprule
+\textbf{Blocked family} & \textbf{Reason, and the substitute} \\
+\midrule
+\endhead
+\code{raw-l3d-*}, \code{raw-ll-*} & There is no L3/system-cache PMU: the SLC is
+  invisible to the core PMU. L2 refills (\code{raw-l2d-cache-refill}) are the
+  last visible level. \\
+\code{raw-stall-backend-l1d}, \code{-l2d}, \code{-tlb}, and the frontend
+  equivalents & Per-structure stall attribution is not implemented. Use
+  \code{raw-stall-backend-mem} for memory-attributed stalls. \\
+\code{raw-l1d-cache-hit}, \code{raw-l2d-cache-hit}, \code{raw-l1d-cache-allocate}
+  & Cache \emph{hit} counters are not implemented. Derive hits as
+  (accesses $-$ refills). \\
+Prefetch refill/hit attribution (\code{*-refill-hwprf}, \code{*-hit-rd-f*}) &
+  Only the prefetcher's \emph{access} counters work
+  (\code{raw-l1d-cache-hwprf}, \code{raw-l2d-cache-hwprf}). You can count
+  prefetcher traffic; you cannot measure its hit rate. \\
+\code{raw-ase-inst-spec} & Reads 0 even on NEON code. SIMD counts under
+  \code{raw-vfp-spec}. \\
+\bottomrule
+\end{longtable}
+
+\subsubsection*{\texttt{per\_core} --- the per-CPU breakdown}
+
+\code{per\_core=True} adds \code{-{}-per-core} to \code{simpleperf}, which
+reports each CPU separately instead of one aggregate. \code{Result.per\_core}
+becomes \code{\{cpu\_id: \{event: count\}\}}, and because \code{simpleperf}
+prints no aggregate row in this mode, \code{Result.counters} is reconstructed by
+summing the cores.
+
+This is how you see load imbalance. Six threads with one straggler look
+identical in the totals and obvious per core.
+
+\subsubsection*{\texttt{counter\_cpus} --- process-scoped vs system-wide}
+\label{sec:countercpus}
+
+By default counting is \textbf{process-scoped}: only your workload is counted,
+wherever the scheduler puts it. That is what you want almost always.
+
+\code{counter\_cpus} switches to \code{simpleperf -{}-cpu}, which counts
+\textbf{per-CPU and system-wide} on the named CPUs --- so it also catches
+whatever else Android decides to run there. It accepts an int, a list of ints,
+or a raw string such as \code{"0-5"}. Use it when the question is ``what is
+happening on these cores'' rather than ``what is my process doing''; interpret
+the result knowing that the answer includes other people's work.
+
+\subsubsection*{What counters cost}
+
+\code{simpleperf} itself costs nothing measurable. The governor sampler that
+rides along with it (\S\ref{sec:clock}) is not free: it forks \code{cat} and
+\code{sleep} every 2\,ms, which is cheap when cores are idle and expensive when
+they are not --- measured at $+1.5\%$ on one Prime core with the machine
+otherwise idle, and $+31\%$ on a six-thread convolution occupying the whole
+Gold cluster. That perturbation would land squarely on the multi-core scaling
+experiments and read as poor parallel efficiency, so \textbf{the sampler only
+runs for single-threaded dispatches}. With \code{threads > 1} you get counters
+without \code{scaling\_cur\_freq\_ghz}.
+
+% ----------------------------------------------------------------------------
+\apient{Effective clock and throttling detection}
+\label{sec:clock}
+
+Two different clock numbers can appear in \code{Result.derived}, and they
+routinely disagree. Both are present only when counters were requested.
+
+\begin{longtable}{@{}p{4.0cm}p{10.7cm}@{}}
+\toprule
+\textbf{Field} & \textbf{What it is} \\
+\midrule
+\endhead
+\code{effective\_ghz} & \textbf{Measured.} Cycles actually retired, divided by
+  \code{threads}, divided by \code{simpleperf}'s own \emph{Total test time}.
+  This is the clock the silicon really ran at. \\
+\code{scaling\_cur\_freq\_ghz} & \textbf{Requested.} The maximum value the
+  governor asked for, sampled from sysfs every 2\,ms \emph{during} the run. \\
+\code{clock\_of\_max\_pct} & \code{effective\_ghz} as a percentage of the
+  cluster ceiling. \\
+\code{scaling\_cur\_freq\_samples} & How many governor samples were taken;
+  reported so you can judge the one above. \\
+\bottomrule
+\end{longtable}
+
+\noindent \code{Result.below\_max\_clock} is \code{True} when
+\code{effective\_ghz} falls below \code{CLOCK\_FLAG\_RATIO} (0.80) of the
+cluster ceiling, and \code{summary()} then appends
+\code{[clock NN\% of max]}.
+
+\textbf{This flag does not mean thermal throttling.} Under the shipping
+\code{walt} governor a low clock is ordinary DVFS. It means ``this did not run
+at full speed''; whether that was intended is yours to judge. What it reliably
+catches is a sweep that silently drops from 4.40 to 1.37\,GHz half way through,
+which otherwise reads as a workload effect.
+
+Three constraints on these fields, each the result of getting it wrong first:
+
+\begin{itemize}[leftmargin=0.6cm]
+  \item \textbf{The denominator must be \code{simpleperf}'s window, not the
+    kernel's \code{wall\_us}.} The counts cover the whole process --- startup,
+    input generation, teardown --- while \code{wall\_us} covers only the timed
+    region. Dividing whole-process cycles by region-only time reported
+    17\,GHz on a 4.4\,GHz part.
+  \item \textbf{\code{scaling\_cur\_freq\_ghz} needs a long enough run.} It is
+    reported only when the workload ran at least 15\,ms and produced at least
+    five samples. A 7\,ms workload yields one or two in-run samples out of
+    thirty --- the rest are idle before and after --- and the maximum then reads
+    \emph{lower} than the effective clock, teaching the exact opposite of the
+    truth. Gating on sample count does not catch this; gating on runtime does.
+  \item \textbf{\code{clock\_of\_max\_pct} needs a single-cluster mask.} With
+    the default \code{core=None} it is absent (\S\ref{sec:affinity}).
+\end{itemize}
+
+% ----------------------------------------------------------------------------
+\apient{Profiler}
+
+The dispatcher.
+
+\begin{lstlisting}
+Profiler(device: Device | None = None, *, verbose: bool = False,
+         thermal: bool = True, thermal_limit_c: float = 90.0)
+\end{lstlisting}
+
+\noindent \code{device} defaults to \code{Device()}, which targets the only
+attached \code{adb} device. \code{verbose=True} prints each generated shell
+command to stdout before it runs. \code{thermal} and \code{thermal\_limit\_c}
+control the temperature check described in \S\ref{sec:thermal}.
+
+\subsubsection*{\texttt{run(tasks, *, parallel=False)}}
+
+The general entry point.
+
+\begin{longtable}{@{}p{5.2cm}p{9.7cm}@{}}
+\toprule
+\textbf{Call} & \textbf{Returns} \\
+\midrule
+\endhead
+\code{run(task)} & a single \code{Result} \\
+\code{run([t1, t2, ...])} & \code{list[Result]}, executed serially, input order
+  preserved \\
+\code{run([t1, t2, ...], parallel=True)} & \code{list[Result]}, executed
+  concurrently, input order preserved \\
+\bottomrule
+\end{longtable}
+
+\noindent The \code{parallel} flag is the whole difference between an isolated
+measurement and a contention measurement, which makes A/B studies a one-token
+edit:
+
+\begin{lstlisting}
+clean     = p.run(batch, parallel=False)
+contended = p.run(batch, parallel=True)
+\end{lstlisting}
+
+\subsubsection*{\texttt{run\_serial(tasks) -> list[Result]}}
+
+Explicit serial form. Equivalent to \code{run(tasks)} on a list.
+
+\subsubsection*{\texttt{run\_parallel(tasks) -> list[Result]}}
+
+Explicit parallel form. Launches one host thread per task
+(\code{ThreadPoolExecutor} sized to the batch), so all dispatches are in flight
+simultaneously. Returns when the last one completes; results stay in input
+order. An empty list returns an empty list.
+
+\subsubsection*{\texttt{run\_dag(tasks) -> dict[str, Result]}}
+
+Executes named tasks in dependency order, one parallel level at a time, and
+returns a mapping from \code{Task.name} to \code{Result}.
+
+\begin{description}[leftmargin=0.8cm]
+  \item[Raises] \code{ValueError} if names are not unique, if a
+    \code{depends\_on} entry names a task that is not in the list, or if the
+    dependency graph contains a cycle. All three checks happen before any
+    dispatch.
+\end{description}
+
+\noindent A failed dependency does \emph{not} cancel its dependents: a task
+whose dependency returned \code{ok=False} still runs. Check \code{ok} on the
+upstream result if that matters to your experiment.
+
+\subsubsection*{\texttt{time\_model(backend, name, reps=100) -> dict}}
+\label{sec:timemodel}
+
+Per-inference time for a converted network, with graph preparation removed.
+See \S\ref{sec:models}.
+
+\subsubsection*{\texttt{power(task, *, seconds=35, artifact=None) -> dict}}
+
+Estimated total-board power and energy while the task runs in a loop. See
+\S\ref{sec:power}.
+
+% ----------------------------------------------------------------------------
+\apient{Thermal reporting}
+\label{sec:thermal}
+
+This HDK runs hot, and has fallen over: a sustained NPU graph reached
+98\,\textdegree C with mitigation engaged, and the board dropped off USB and
+needed its power cut by hand (Discovery~73). After every dispatch the profiler
+reads the die sensors, records them on the \code{Result}, and prints one line
+to stderr if the hottest zone has reached the limit (once per hot spell, again
+only if it climbs another 5\,\textdegree C).
+
+\begin{lstlisting}[style=plain]
+  TOO HOT: 92 C on cpu-0-5-1 (limit 90 C). Let the board cool for a minute
+  before the next run -- measurements taken now are throttled, and this board
+  has dropped off USB at 98 C.
+\end{lstlisting}
+
+\noindent \code{summary()} also appends \code{[HOT 92C]}, and a later
+dispatch that has come back down prints \code{cooled to 71 C.} once.
+
+\subsubsection*{It reports; it does not act}
+
+The profiler will not sleep, throttle, retry, re-order or refuse. Whether a hot
+board invalidates \emph{your} measurement depends on what you are measuring ---
+a thermal study wants the hot board --- so that judgement stays with you. This
+is the same commitment as everywhere else in the API: it tells you what
+happened and changes nothing on your behalf.
+
+\subsubsection*{Where 90\,\textdegree C comes from}
+
+Measured on board 5cabf4fd, 2026-09-22:
+
+\begin{longtable}{@{}p{6.0cm}p{8.7cm}@{}}
+\toprule
+\textbf{State} & \textbf{Hottest zone} \\
+\midrule
+\endhead
+Idle & $\approx$30\,\textdegree C \\
+One heavy 6-thread CPU dispatch & 62\,\textdegree C \\
+Four back to back (the lab plateau) & 77--79\,\textdegree C \\
+All-core interference (Task 7), just after the run & 88--92\,\textdegree C, falls within seconds \\
+Runaway NPU (Discovery~73) & 98\,\textdegree C, board lost \\
+\bottomrule
+\end{longtable}
+
+\noindent 90 sits in the gap: clear of the 78\,\textdegree C an ordinary CPU
+sweep reaches and of the brief peaks after an all-core run, so it does not cry
+wolf, and still well under the 98 where this board has actually been lost. Change it with \code{thermal\_limit\_c}.
+
+\subsubsection*{Which sensors, and the 105\,\textdegree C trap}
+
+\code{/sys/class/thermal} exposes 135 entries on this board and \textbf{not
+all of them are sensors}. \code{cpu-hw-trip-0} and \code{cpu-hw-trip-1} read a
+constant \code{105000}: they are trip-point \emph{settings}. Taking the
+maximum across every zone therefore reports 105\,\textdegree C forever, on an
+idle board --- a false claim this project published once before anyone checked
+the node type.
+
+The selector is therefore a \textbf{whitelist}, \code{\_THERMAL\_ZONE\_RE},
+covering 40 zones: 16 CPU core sensors, 4 cluster-cache, 11 \code{gpuss-*},
+4 \code{nsphvx-*} (Hexagon HVX, the DSP), 4 \code{nsphmx-*} (Hexagon HMX, the
+NPU) and \code{ddr}. Everything else --- trip points, battery-current-limit
+levels, the \code{Debug\_Board} battery dummy, camera, modem and PMIC package
+sensors --- is ignored. \code{verify\_board.py} uses the same whitelist.
+
+\subsubsection*{What it costs, and when to switch it off}
+
+Scanning all 135 zones costs about a second per read --- two \code{cat}s per
+zone over \code{adb}. Instead the zone indices are resolved \textbf{once}
+(about 560\,ms, on the first dispatch) and subsequent reads are a single
+\code{cat} of the 40 whitelisted files.
+
+\begin{longtable}{@{}p{4.6cm}p{10.1cm}@{}}
+\toprule
+\textbf{Setting} & \textbf{Cost, measured} \\
+\midrule
+\endhead
+\code{thermal=True} (default) & about \textbf{16\,ms} added per dispatch in
+  steady state, plus roughly 560\,ms once on the first. \\
+\code{thermal=False} & nothing. \code{temp\_c} is \code{None} and
+  \code{temps} is empty. \\
+\bottomrule
+\end{longtable}
+
+\noindent Worth switching off for a long sweep of very short dispatches, where
+16\,ms can exceed the kernel time and dominates the run. Leave it on for
+anything that loads the board for more than a moment --- which is when it
+matters.
+
+\subsubsection*{Reading it yourself}
+
+\begin{lstlisting}
+r = p.run(convolution(Backend.CPU, cin=64, cout=64, threads=6, core="gold"))
+r.temp_c                                   # 78.7
+r.too_hot                                  # False at the default limit
+sorted(r.temps.items(), key=lambda kv: -kv[1])[:3]
+# [('cpu-0-5-1', 78.7), ('cpu-0-5-0', 75.7), ('cpu-0-1-1', 75.7)]
+\end{lstlisting}
+
+% ----------------------------------------------------------------------------
+\apient{Result}
+\label{sec:result}
+
+The parsed outcome of one dispatch.
+
+\begin{longtable}{@{}p{2.9cm}p{2.4cm}p{9.2cm}@{}}
+\toprule
+\textbf{Field} & \textbf{Type} & \textbf{Meaning} \\
+\midrule
+\endhead
+\code{task} & \code{Task} & The task that produced this result. \\
+\code{ok} & \code{bool} & \code{False} on non-zero exit, on a kernel-reported
+  status that is not one of \code{OK}/\code{SUCCESS}/\code{PASS}/\code{PASSED}/\code{DONE},
+  on timeout, or when the kernel printed no timing field at all. \\
+\code{compute\_us} & \code{float | None} & Backend-native compute time in
+  microseconds (\S\ref{sec:fields}). This is the number to compare across
+  engines. \\
+\code{compute\_key} & \code{str | None} & \emph{Which} kernel field
+  \code{compute\_us} came from. Worth checking when comparing engines: the
+  semantics differ per field. \\
+\code{wall\_us} & \code{float | None} & The kernel's own wall-clock figure where
+  it prints one. On the DSP and NPU this includes host-side transport, so
+  \code{wall\_us} $\gg$ \code{compute\_us} is expected and meaningful. \\
+\code{gflops} & \code{float | None} & Derived: FLOP count divided by
+  \code{compute\_us}, with the iteration corrections of
+  \S\ref{sec:iterations} applied. \\
+\code{gbps} & \code{float | None} & Derived: byte count divided by
+  \code{compute\_us}. Present when the kernel prints \code{bytes=}, when the
+  workload has a \code{bytes\_fn}, or when the kernel prints its own
+  \code{useful\_gbps}. \\
+\code{fingerprint} & \code{float | None} & The kernel's numerical checksum, used
+  to confirm the computation was correct before trusting its timing. For the
+  QNN matmul clients, which print \code{fingerprint\_sum} and
+  \code{fingerprint\_frob} but never a combined line, the two halves are added. \\
+\code{fields} & \code{dict} & Every \code{key=value} token and \code{key: value}
+  line parsed from stdout, numerics coerced to \code{int}/\code{float}, plus
+  \code{host\_wall\_us} added by the profiler. \\
+\code{raw} & \code{str} & Unmodified stdout. \\
+\code{error} & \code{str | None} & Failure text (first 300 characters of stderr,
+  or stdout, or the exit code) when \code{ok} is \code{False}. \\
+\code{counters} & \code{dict} & Event \arrow{} raw count. Empty when no counters
+  were requested. \\
+\code{per\_core} & \code{dict} & \code{\{cpu\_id: \{event: count\}\}}. Empty
+  unless \code{per\_core=True}. \\
+\code{derived} & \code{dict} & Ratios the raw counts imply --- IPC, miss rates,
+  stall percentages, effective clock. Only the ones the present events
+  support. \\
+\code{multiplexed} & \code{bool} & More than 12 events were requested, so the
+  counts are scaled estimates rather than exact. \\
+\code{below\_max\_clock} & \code{bool} & Ran under 80\% of the cluster ceiling
+  (\S\ref{sec:clock}). \\
+\code{temp\_c} & \code{float | None} & Hottest die sensor immediately
+  \emph{after} the dispatch, in \textdegree C. \code{None} when thermal
+  reporting is off (\S\ref{sec:thermal}). \\
+\code{temps} & \code{dict} & Every zone read, \code{\{zone: degrees\}}. A
+  78\,\textdegree C core beside a 30\,\textdegree C GPU is a different
+  situation from both at 78. \\
+\code{too\_hot} & \code{bool} & \code{temp\_c} reached the limit. Reported,
+  never acted on. \\
+\bottomrule
+\end{longtable}
+
+\subsubsection*{Properties}
+
+\begin{longtable}{@{}p{4.0cm}p{10.7cm}@{}}
+\toprule
+\textbf{Property} & \textbf{Value} \\
+\midrule
+\endhead
+\code{result.iterations} & How many times the kernel repeated the work inside
+  one dispatch --- read from \code{iterations}/\code{reps}/\code{inner-reps} in
+  the output, but only when \code{compute\_key} is a \emph{total} field
+  (\code{wall\_us}). Otherwise 1. \\
+\code{result.compute\_us\_per\_iter} & \code{compute\_us / iterations}: the
+  per-dispatch latency. \\
+\bottomrule
+\end{longtable}
+
+\subsubsection*{\texttt{summary() -> str}}
+
+A one-line, column-aligned digest: task name; then either \code{N us} or
+\code{N us/iter xM} when the kernel repeated the work $M$ times; then GFLOP/s,
+GB/s, any of \code{ns\_per\_access} / \code{finalize\_us} / \code{transfer\_ns}
+/ \code{readback\_ns} that are present, the fingerprint, IPC when counters ran,
+and the \code{[multiplexed]} / \code{[clock NN\% of max]} markers. On failure it
+returns \code{"[FAIL] <name>: <error>"}.
+
+It is a display helper --- read the typed fields, not this string, when you are
+computing on the results.
+
+\subsubsection*{\texttt{counter\_table() -> str}}
+
+A multi-line block: every raw count, then the per-core matrix if there is one,
+then every derived ratio. Returns \code{"(no counters collected)"} when there
+are none.
+
+% ----------------------------------------------------------------------------
+\apient{Device}
+
+The \code{adb} transport.
+
+\begin{lstlisting}
+Device(serial: str | None = None, adb: str = "adb",
+       base: str = "/data/local/tmp/profiler-kernels")
+
+device.shell(command: str, timeout: float = 180.0) -> tuple[str, str, int]
+device.is_connected() -> bool
+\end{lstlisting}
+
+\begin{itemize}[leftmargin=0.6cm]
+  \item \code{serial} selects one board when several are attached
+    (\code{adb devices}); \code{None} uses the only one.
+  \item \code{adb} lets you point at a specific platform-tools binary.
+  \item \code{base} relocates the on-device kernel tree. It does \emph{not}
+    relocate converted networks, which live under \code{/data/local/tmp}
+    independently.
+  \item \code{shell} returns \code{(stdout, stderr, returncode)} and never
+    raises: a timeout is reported as return code 124 with an explanatory
+    stderr.
+  \item \code{is\_connected} runs \code{echo ok} with a 10-second timeout.
+\end{itemize}
+
+\begin{lstlisting}
+p = Profiler(Device(serial="5cabf4fd"), verbose=True)
+if not p.device.is_connected():
+    raise SystemExit("board not reachable")
+\end{lstlisting}
+
+% ----------------------------------------------------------------------------
+\apient{build\_command(task, base) -> str}
+
+Returns the exact device shell command a task would run, without running it.
+Useful for logging a sweep's provenance, for pasting a single case into an
+\code{adb shell} session, and for unit-testing flag construction with no
+hardware attached.
+
+\begin{lstlisting}
+>>> from profiler import build_command, matmul, Backend, DEVICE_BASE
+>>> print(build_command(matmul(Backend.DSP, size=512), DEVICE_BASE))
+cd /data/local/tmp/profiler-kernels/dsp && LD_LIBRARY_PATH=.
+ADSP_LIBRARY_PATH='.;/data/local/tmp/profiler-kernels/dsp'
+./matmul_dsp_hvx --size 512
+
+>>> print(build_command(matmul(Backend.GPU, variant="best"), DEVICE_BASE))
+cd /data/local/tmp/profiler-kernels/gpu && LD_LIBRARY_PATH=.
+./matmul_opencl_fp32_3x16u4_sg_half
+\end{lstlisting}
+
+\noindent (Line breaks above are for the page; the real return value is one
+line.) With counters requested the returned string additionally carries the
+\code{simpleperf} prefix, the governor sampler, and the surrounding
+\code{su 0 sh -c '...'} wrapper.
+
+% ----------------------------------------------------------------------------
+\apient{The registry: \texttt{WORKLOADS}, \texttt{Workload}, \texttt{KernelEntry}}
+\label{sec:registry}
+
+\code{WORKLOADS} is a module-level dictionary mapping workload name to a
+\code{Workload}, and is the single source of truth for the on-device layout. A
+\code{Workload} carries its per-backend \code{KernelEntry} table plus optional
+\code{flop\_fn} / \code{bytes\_fn} callables used to derive throughput for
+kernels that do not print their own operation counts.
+
+\begin{longtable}{@{}p{4.3cm}p{10.4cm}@{}}
+\toprule
+\textbf{\code{KernelEntry} field} & \textbf{Meaning} \\
+\midrule
+\endhead
+\code{subdir} & Directory under the device base; \code{""} means the base
+  itself. \\
+\code{variants} & Variant name \arrow{} binary filename. \\
+\code{default} & Variant used when the task does not name one. \\
+\code{ldpath} & \code{LD\_LIBRARY\_PATH} for GPU dispatches. Default
+  \code{/vendor/lib64}; \code{"."} where the kernel ships its own libraries. \\
+\code{variant\_is\_flag} & \code{True} when the variant is selected by a
+  \code{-{}-variant} flag on a single binary rather than by choosing a
+  different file. True for the DSP saxpy/reduction/convolution entries and for
+  GPU \code{nbody}. \\
+\code{defaults} & Flags always applied unless the task overrides them, e.g.\
+  \code{power=lab} on DSP, \code{perf\_mode=sustained} on NPU. \\
+\code{fixed\_size} & Variant \arrow{} the only \code{-{}-size} it accepts
+  (\S\ref{sec:fixedsize}). \\
+\code{param\_map} & Rename a parameter on the way to the CLI, where the kernel
+  spells it differently (\S\ref{sec:parammap}). \\
+\code{threaded\_variants} & Which variants accept \code{-{}-threads}
+  (\S\ref{sec:threads}). Empty means the whole entry is single-threaded. \\
+\code{totals\_with\_per\_iteration\_time} & This kernel prints
+  \code{flop=}/\code{bytes=} covering \emph{all} iterations while its timing
+  field measures \emph{one} (\S\ref{sec:iterations}). \\
+\bottomrule
+\end{longtable}
+
+\noindent Reading \code{WORKLOADS} is the supported way to enumerate what
+exists:
+
+\begin{lstlisting}
+for name, wl in WORKLOADS.items():
+    for backend, entry in wl.kernels.items():
+        print(name, backend, sorted(entry.variants), "default:", entry.default)
+\end{lstlisting}
+
+% ============================================================================
+\section{Kernel and variant catalogue}
+\label{sec:catalogue}
+% ============================================================================
+
+\noindent\emph{Generated equivalent:} \code{python profiler.py -{}-catalogue}.
+That output is built from the registry at runtime and cannot drift; this table
+is hand-maintained. Defaults marked below are applied automatically and can be
+overridden by passing the same keyword to the task. An asterisk marks the
+default variant.
+
+\begin{longtable}{@{}p{1.9cm}p{0.8cm}p{5.4cm}p{6.0cm}@{}}
+\toprule
+\textbf{Workload} & \textbf{Bk} & \textbf{Variants} & \textbf{Applied defaults / notes} \\
+\midrule
+\endhead
+matmul & CPU & \code{neon}$^\ast$, \code{eigen} & \code{iterations=10};
+  \code{neon} is threaded \\
+matmul & GPU & \code{naive}$^\ast$, \code{tiled}, \code{fp16}, \code{vec4},
+  \code{fp32\_3x16u4}, \code{fp32\_3x16u4\_db}, \code{fp32\_4x16u4},
+  \code{fp32\_8x16u4}, \code{anysize}, \code{fp16\_best}, \code{best} &
+  \code{ldpath="."}; the six register-blocked variants are \textbf{size=512
+  only} \\
+matmul & DSP & \code{scalar}, \code{hvx}$^\ast$, \code{vtcm} & separate
+  binaries, not flag-selected \\
+matmul & NPU & \code{fp16}$^\ast$, \code{int8} &
+  \code{perf\_mode=sustained}, \code{reps=16}; \code{size}\arrow\code{-{}-n},
+  \code{iterations}\arrow\code{-{}-reps} \\
+\midrule
+saxpy & CPU & \code{scalar}, \code{neon}$^\ast$ & \code{iterations=200};
+  both threaded \\
+saxpy & GPU & \code{fp32}$^\ast$ & --- \\
+saxpy & DSP & \code{scalar}, \code{hvx}$^\ast$ & one binary, \code{-{}-variant};
+  \code{power=lab}, \code{iterations=50} \\
+saxpy & NPU & \code{fp16}$^\ast$ & \code{perf\_mode=sustained}, \code{reps=5} \\
+\midrule
+reduction & CPU & \code{scalar}, \code{neon}$^\ast$ & \code{iterations=200};
+  both threaded \\
+reduction & GPU & \code{fp32}$^\ast$ & --- \\
+reduction & DSP & \code{scalar}, \code{hvx}$^\ast$ & \code{-{}-variant};
+  \code{power=lab}, \code{iterations=50} \\
+reduction & NPU & \code{fp16}$^\ast$ & \code{perf\_mode=sustained}, \code{reps=5} \\
+\midrule
+convolution & CPU & \code{scalar}, \code{neon}$^\ast$, \code{int8} &
+  \code{iterations=10}; \code{neon} and \code{int8} threaded, \code{scalar} not \\
+convolution & GPU & \code{fp32}$^\ast$ & --- \\
+convolution & DSP & \code{scalar}, \code{hvx}$^\ast$, \code{int8} & \code{-{}-variant};
+  \code{power=lab}, \code{iterations=2} \\
+convolution & NPU & \code{fp16}$^\ast$ & \code{perf\_mode=sustained}, \code{reps=5} \\
+\midrule
+nbody & CPU & \code{neon}$^\ast$ & \code{iterations=4}; threaded \\
+nbody & GPU & \code{naive}, \code{tiled}$^\ast$ & one binary,
+  \code{-{}-variant}; \code{iterations=5} \\
+\midrule
+decode & CPU & \code{neon}$^\ast$ & --- \\
+decode & GPU & \code{naive}$^\ast$, \code{gemv} & \code{ldpath="."},
+  \code{wg-x=64}, \code{wg-y=8}; \code{n}\arrow\code{-{}-ncols} \\
+decode & NPU & \code{fp16}$^\ast$ & \code{perf\_mode=sustained},
+  \code{reps=20}; \code{n}\arrow\code{-{}-ncols} \\
+\midrule
+cachelat & CPU & \code{latency}$^\ast$ & \code{accesses=40000000},
+  \code{pattern=random} \\
+morph & DSP & \code{morph}$^\ast$ & --- \\
+gpu\_memlab & GPU & \code{memlab}$^\ast$ & \code{mode=coalesce} \\
+\midrule
+custom & all four & --- & you supply the binary name (\S\ref{sec:custom}) \\
+model & CPU, GPU, NPU & \code{qnn}$^\ast$ & dispatched through
+  \code{qnn-net-run} (\S\ref{sec:models}) \\
+\bottomrule
+\end{longtable}
+
+\paragraph{The GPU matmul variant trap.} \code{matmul} on the GPU defaults to
+\code{naive}, which is roughly 16$\times$ slower than \code{best}. That default
+is deliberate --- it keeps the optimisation ladder visible --- but it makes
+cross-backend comparison meaningless if you forget it. A GPU-versus-NPU matmul
+run at the default variant measures an unoptimised OpenCL kernel against a
+tuned tensor engine and tells you nothing about the silicon. Name
+\code{variant="best"} for any cross-engine claim.
+
+\paragraph{The register-blocked variants accept exactly one size.}
+\label{sec:fixedsize}
+\code{best}, \code{fp16\_best}, \code{fp32\_3x16u4}, \code{fp32\_3x16u4\_db},
+\code{fp32\_4x16u4} and \code{fp32\_8x16u4} are compiled for $N=512$ and assert
+on anything else. The API checks this at construction:
+
+\begin{lstlisting}[style=plain]
+ValueError: variant 'best' is compiled for size=512 only, got size=1024.
+Use an any-size variant (naive, tiled, vec4, fp16, anysize) to sweep sizes.
+\end{lstlisting}
+
+\noindent \code{anysize} is the register-blocked kernel recompiled to accept
+arbitrary $N$; use it when you want the blocked shape \emph{and} a size sweep.
+
+\paragraph{The register-tile ladder.} \code{vec4} \arrow{} \code{fp32\_3x16u4}
+\arrow{} \code{fp32\_4x16u4} \arrow{} \code{fp32\_8x16u4} sweeps tile shape,
+which is the knob that actually moved GFLOP/s on this GPU.
+\code{fp32\_4x16u4} and \code{fp16\_best} share the 4$\times$16 tile, so that
+pair isolates \emph{precision} alone; \code{best} is a different (3$\times$16)
+shape. More variants exist unregistered under \code{kernels/matmul/gpu/}.
+
+% ============================================================================
+\section{Parameter reference}
+\label{sec:params}
+% ============================================================================
+
+\subsection{How keywords become flags}
+
+\begin{longtable}{@{}p{4.6cm}p{4.6cm}p{5.2cm}@{}}
+\toprule
+\textbf{Python keyword} & \textbf{Becomes} & \textbf{Rule} \\
+\midrule
+\endhead
+\code{size=1024} & \code{-{}-size 1024} & scalar values are stringified \\
+\code{perf\_mode="sustained"} & \code{-{}-perf-mode sustained} & underscores
+  become hyphens \\
+\code{H=256} & \code{-{}-H 256} & case is preserved \\
+\code{validate\_only=True} & \code{-{}-validate-only} & \code{True} emits a bare
+  flag with no value \\
+\code{iterations=None} & (dropped) & \code{None} and \code{False} are omitted \\
+\bottomrule
+\end{longtable}
+
+\noindent Values are shell-quoted with \code{shlex.quote}, so strings with
+spaces are safe. Entry defaults are applied first and task parameters overwrite
+them. Ordering within the command is defaults-then-overrides, which is why
+\code{-{}-perf-mode sustained} appears before \code{-{}-cin} in the NPU
+examples.
+
+\subsection{Parameter renaming: \texttt{param\_map}}
+\label{sec:parammap}
+
+Three registry entries rename a parameter on its way to the CLI, because the
+kernel spells it differently:
+
+\begin{longtable}{@{}p{3.2cm}p{11.5cm}@{}}
+\toprule
+\textbf{Entry} & \textbf{Renames} \\
+\midrule
+\endhead
+matmul / NPU & \code{size} \arrow{} \code{-{}-n}, \code{iterations} \arrow{}
+  \code{-{}-reps} \\
+decode / GPU & \code{n} \arrow{} \code{-{}-ncols} \\
+decode / NPU & \code{n} \arrow{} \code{-{}-ncols} \\
+\bottomrule
+\end{longtable}
+
+\noindent This exists to make the 4$\times$4 matrix uniform. Before it, NPU
+matmul was the one cell where \code{iterations=N} hard-failed, so a loop over
+all four backends died on one engine; and \code{size} had to be passed twice
+(once as \code{n} for the kernel, once as \code{size} for the FLOP model).
+Now \code{matmul(Backend.NPU, size=1024)} sends \code{-{}-n 1024} \emph{and}
+computes $2 \cdot 1024^3$ FLOP, because \code{flop\_fn} reads the task's
+original parameters while the rename happens only on the way to the shell.
+
+\textbf{The corresponding hazard:} a rename that is missing or wrong does not
+error. Kernels ignore unknown flags silently, so the dispatch succeeds and
+quietly measures the kernel's \emph{default} shape instead of yours.
+
+\subsection{Parameters accepted by each kernel}
+
+\begin{longtable}{@{}p{2.3cm}p{1.1cm}p{11.2cm}@{}}
+\toprule
+\textbf{Workload} & \textbf{Bk} & \textbf{Accepted parameters} \\
+\midrule
+\endhead
+matmul & CPU & \code{size}, \code{iterations}, \code{seed},
+  \code{validate\_only} \\
+matmul & GPU & \code{size}, \code{seed}, \code{wg\_x}, \code{wg\_y},
+  \code{wg\_z}; blocked variants also take \code{inner\_reps} \\
+matmul & DSP & \code{size}, \code{seed} \\
+matmul & NPU & \code{size} (renamed to \code{-{}-n}), \code{iterations}
+  (renamed to \code{-{}-reps}), \code{perf\_mode}, \code{seed} \\
+\midrule
+saxpy & CPU & \code{size}, \code{alpha}, \code{iterations}, \code{seed},
+  \code{validate\_only} \\
+saxpy & GPU & \code{size}, \code{alpha}, \code{seed}, \code{wg\_x},
+  \code{wg\_y}, \code{wg\_z} \\
+saxpy & DSP & \code{size}, \code{alpha}, \code{iterations}, \code{power},
+  \code{seed}, \code{validate\_only} \\
+saxpy & NPU & \code{size}, \code{alpha}, \code{reps}, \code{perf\_mode},
+  \code{seed} \\
+\midrule
+reduction & CPU & \code{size}, \code{iterations}, \code{seed},
+  \code{validate\_only} \\
+reduction & GPU & \code{size}, \code{seed}, \code{wg\_x}, \code{wg\_y},
+  \code{wg\_z} \\
+reduction & DSP & \code{size}, \code{iterations}, \code{power}, \code{seed},
+  \code{validate\_only} \\
+reduction & NPU & \code{size}, \code{reps}, \code{perf\_mode}, \code{seed} \\
+\midrule
+convolution & CPU & \code{H}, \code{W}, \code{cin}, \code{cout}, \code{k},
+  \code{iterations}, \code{seed}, \code{validate\_only} \\
+convolution & GPU & \code{H}, \code{W}, \code{cin}, \code{cout}, \code{k},
+  \code{seed}, \code{wg\_x} \\
+convolution & DSP & \code{H}, \code{W}, \code{cin}, \code{cout}, \code{k},
+  \code{iterations}, \code{power}, \code{seed} \\
+convolution & NPU & \code{H}, \code{W}, \code{cin}, \code{cout}, \code{k},
+  \code{reps}, \code{perf\_mode} \\
+\midrule
+nbody & CPU & \code{bodies}, \code{iterations}, \code{seed} \\
+nbody & GPU & \code{bodies}, \code{iterations}, \code{seed} \\
+\midrule
+decode & CPU & \code{tokens}, \code{k}, \code{n}, \code{iterations} \\
+decode & GPU & \code{tokens}, \code{k}, \code{n} (\arrow\code{-{}-ncols}),
+  \code{wg\_x}, \code{wg\_y} \\
+decode & NPU & \code{tokens}, \code{k}, \code{n} (\arrow\code{-{}-ncols}),
+  \code{reps}, \code{perf\_mode} \\
+\midrule
+cachelat & CPU & \code{kb}, \code{accesses}, \code{pattern}, \code{stride},
+  \code{smallpages}, \code{hugepages} (both bare flags) \\
+morph & DSP & \code{op} (erode/dilate), \code{impl} (student/qhl), \code{damage}
+  (salt/pepper), \code{k}, \code{input} (P5 PGM, default \code{dog.pgm}),
+  \code{W}, \code{H} (synthetic image only), \code{iterations}, \code{write\_pgm} \\
+gpu\_memlab & GPU & \code{mode} (coalesce/divergence/spmv/densemv), \code{stride}
+  (in 4-byte floats), \code{kb} (buffer size in KiB), \code{active}, \code{density},
+  \code{rows}, \code{cols}, \code{local} (workgroup size), \code{reps} \\
+\bottomrule
+\end{longtable}
+
+\noindent \textbf{Do not pass \code{variant} or \code{power} as ordinary
+parameters on the DSP.} \code{variant} is set for you from \code{Task.variant}
+on the entries that are flag-selected, and \code{power} already defaults to
+\code{lab}. Override \code{power} only when you specifically want the baseline
+DCVS behaviour: \code{power="baseline"}.
+
+\noindent \textbf{\code{cachelat}: page size and run length.} This board
+runs transparent huge pages in \emph{always} mode, so the buffer already gets
+2\,MB pages with no flag, and \code{-p hugepages=true} changes nothing.
+\code{-p smallpages=true} forces 4\,KB pages; compare it against a run
+without it to see what the TLB costs. The default \code{accesses=40000000}
+finishes in about 40\,ms when the buffer fits in L1, which is too short to
+trust. Set \code{-p accesses=} yourself (200000000 gives about 180\,ms on a
+Prime core).
+
+\noindent \textbf{\code{morph}: residual and images.} Every run reports
+\code{residual=}. That is the number of pixels where your output differs
+from the same filter applied to the undamaged photo, i.e.\ damage that
+survived. Lower is better. Add \code{-p write\_pgm=true} to any run and the
+profiler saves before and after pictures to \code{morph\_images/} in the
+container. To open them on your laptop, run
+\code{docker cp lab3:/workspace/morph\_images .} in a terminal on your machine.
+
+\noindent \textbf{\code{gpu\_memlab}: modes, units and power runs.} One binary,
+four tests, picked with \code{mode}. \code{coalesce} (the default) reads with
+\code{stride} floats between neighbouring work-items and reports GB/s.
+\code{divergence} lets \code{active} lanes out of every 64 do the work and
+reports GFLOP/s. \code{spmv} and \code{densemv} multiply a \code{rows} $\times$
+\code{cols} matrix by a vector, sparse at the given \code{density} or dense.
+Units: \code{stride} counts 4-byte floats, not bytes, and \code{kb} is in KiB.
+Keep \code{-p kb=65536} (64\,MiB); \code{-p kb=64} is legal but runs a 64\,KiB
+buffer that fits in cache. Times are device-side OpenCL events, the minimum over
+\code{reps} launches, so short runs are fine for \code{p.run()}. For
+\code{p.power()} use a large \code{reps} (e.g.\ 5000): the power loop repeats the
+whole command, setup and buffer upload included, and with few reps the GPU is
+idle for much of the window.
+
+\subsection{Derived FLOP and byte counts follow \emph{your} parameters}
+
+Where a kernel prints \code{flop=} or \code{bytes=}, the printed value always
+wins. Where it does not, the workload's \code{flop\_fn} / \code{bytes\_fn}
+computes one from the task's parameters:
+
+\begin{longtable}{@{}p{2.1cm}p{12.6cm}@{}}
+\toprule
+\textbf{Workload} & \textbf{Model} \\
+\midrule
+\endhead
+matmul & $2n^3$ from \code{size} (default 512) \\
+convolution & $2 \cdot H \cdot W \cdot c_{out} \cdot k^2 \cdot c_{in}$ from
+  \code{H}, \code{W}, \code{cin}, \code{cout}, \code{k} (defaults
+  $256, 256, 8, 8, 3$) \\
+nbody & $20 n^2$ from \code{bodies} (default 4096), with $n$ \textbf{rounded
+  down to a multiple of 64} --- both kernels do that internally, so the model
+  mirrors it rather than reporting a rate computed from a body count nobody
+  simulated \\
+decode & FLOP $2 \cdot S \cdot k \cdot n$ from \code{tokens}, \code{k},
+  \code{n}; bytes $= 4kn$, \emph{weight traffic only}. That accounting is right
+  while $S \ll k$, which is the regime the workload exists to show, and stops
+  being right for large $S$ \\
+saxpy, reduction & no model --- these kernels print their own \code{flop=} and
+  \code{bytes=} \\
+\bottomrule
+\end{longtable}
+
+\noindent \textbf{The consequence is worth stating plainly.} If you change the
+shape on the device without changing the corresponding Python parameter, the
+timing stays correct and the derived throughput goes silently wrong. The model
+has no way to see the device.
+
+\subsection{Iteration accounting, and why it is not obvious}
+\label{sec:iterations}
+
+Kernels repeat their work internally, and they disagree about whether the time
+they print covers one repetition or all of them. Getting this wrong misreports
+throughput by exactly the iteration count, so the API corrects for it in two
+opposite directions.
+
+\begin{longtable}{@{}p{3.0cm}p{11.7cm}@{}}
+\toprule
+\textbf{Situation} & \textbf{What the API does} \\
+\midrule
+\endhead
+\textbf{Time is a total, work model is per-iteration.} The CPU kernels report
+  \code{wall\_us} across every repetition, while \code{flop\_fn} describes one
+  dispatch. & Scale the work \emph{up} by the repeat count. Without this, CPU
+  NEON matmul at \code{iterations=20} reported 1.37 GFLOP/s instead of
+  $\approx$29. \\
+\textbf{Work is a total, time is per-iteration.} The DSP saxpy, reduction and
+  convolution kernels \emph{print} \code{flop=}/\code{bytes=} summed across
+  every iteration, while \code{dsp\_us} is measured inside the DSP and covers
+  one. & Scale the work \emph{down}, flagged by
+  \code{totals\_with\_per\_iteration\_time} on those entries. Without this
+  every DSP figure inflates by the iteration count --- 50$\times$ on
+  saxpy/reduction, 2$\times$ on convolution, at the registry defaults. \\
+\bottomrule
+\end{longtable}
+
+\noindent Only \code{wall\_us} is a total. \code{execute\_us\_mean},
+\code{dsp\_us}, \code{mean\_us} and \code{duration\_ns} are already
+per-dispatch --- a mean, or one timed region --- and must never be divided by
+the repeat count. Doing so reported an NPU convolution as 32\,\us/iter when the
+real per-inference time was 172.
+
+\code{Result.iterations} exposes the repeat count the API used, and
+\code{Result.compute\_us\_per\_iter} the per-dispatch latency.
+\code{summary()} prints \code{N us/iter xM} rather than a bare time whenever
+$M > 1$, so the total stays recoverable and nobody reads a ten-iteration
+convolution as one slow one.
+
+
+% ============================================================================
+\section{What the fields mean, per backend}
+\label{sec:fields}
+% ============================================================================
+
+\subsection{Selection of \texttt{compute\_us}}
+
+The parser takes the first field present, in this order. \code{Result.compute\_key}
+records which one won.
+
+\begin{longtable}{@{}p{3.6cm}p{1.6cm}p{9.4cm}@{}}
+\toprule
+\textbf{Field} & \textbf{Backend} & \textbf{What it measures} \\
+\midrule
+\endhead
+\code{execute\_us\_mean} & NPU & Mean of \code{reps} graph executions, excluding
+  graph finalisation. \\
+\code{dsp\_us} & DSP & Time measured on the Hexagon itself, excluding FastRPC
+  marshalling. Per iteration. \\
+\code{mean\_us} & varies & Mean over a kernel's own measured iterations. \\
+\code{duration\_ns} & GPU & OpenCL profiling event, kernel only, excluding host
+  transfers. Divided by 1000 into \us. \\
+\code{wall\_us} & CPU & Host-measured wall clock around the timed region.
+  \textbf{The only total.} \\
+\bottomrule
+\end{longtable}
+
+\noindent Every one of these is \emph{compute only}. Comparing
+\code{compute\_us} across engines compares the engines; it does not tell you
+which is fastest end-to-end. A kernel that prints none of them is treated as a
+contract violation and reported as a failure, not as a success with a blank
+time --- see \S\ref{sec:custom}.
+
+\subsection{Transport and overhead fields}
+
+These live in \code{Result.fields} and are never folded into
+\code{compute\_us}:
+
+\begin{longtable}{@{}p{3.4cm}p{1.6cm}p{9.6cm}@{}}
+\toprule
+\textbf{Field} & \textbf{Backend} & \textbf{Meaning} \\
+\midrule
+\endhead
+\code{transfer\_ns} & GPU & Host \arrow{} device input copy. On SAXPY this runs
+  from 0.76$\times$ to 3.6$\times$ the kernel time. \\
+\code{readback\_ns} & GPU & Device \arrow{} host result copy. Collapses to a few
+  microseconds when the output is a scalar (reduction). \\
+\code{cl\_start\_ns}, \code{cl\_end\_ns} & GPU & Raw OpenCL event timestamps. \\
+\code{useful\_gbps} & GPU & Some kernels compute their own rate because only
+  they know what counts as \emph{useful}. \code{gpu\_memlab} is the case in
+  point: the bytes the memory system moves can differ from the bytes the kernel
+  actually uses, and the host cannot see that from outside. Picked up into
+  \code{Result.gbps} when nothing else supplies it. \\
+\code{ns\_per\_access} & CPU & \code{cachelat}'s headline number, and the ruler
+  the cache hierarchy is measured with. Promoted into \code{summary()}. \\
+\code{finalize\_us} & NPU & QNN graph compilation. Roughly 10\,ms for
+  convolution, 4.4\,ms for reduction, and \textbf{50--110 seconds} for SAXPY,
+  which has no native primitive. \\
+\code{wall\_us} & DSP, NPU & Includes FastRPC / QNN transport, so the gap
+  against \code{compute\_us} is the marshalling tax (up to two orders of
+  magnitude on DSP streaming kernels). \\
+\code{execute\_us\_min}, \code{\_max}, \code{\_cov\_pct} & NPU & Spread across
+  \code{reps}; the coefficient of variation is the cheapest stability check you
+  have. \\
+\code{host\_wall\_us} & all & Added by the profiler, not the kernel: the
+  host-observed round trip including \code{adb} latency. Always present. For
+  \code{model} tasks it is the \emph{only} timing available. \\
+\code{fingerprint} & all & Numerical checksum. Compare it against a
+  known-good run before trusting a timing. \\
+\bottomrule
+\end{longtable}
+
+\subsection{What counters mean on a non-CPU backend}
+\label{sec:accelcounters}
+
+The \code{simpleperf} prefix is applied on \emph{every} backend, not just the
+CPU, and the dispatch succeeds. \textbf{What you get back is the ARM process
+that drives the accelerator, not the accelerator.} A DSP run with
+\code{counters="basic"} reports the IPC of the CPU core executing the FastRPC
+client while the Hexagon does the arithmetic. That is a genuinely useful
+measurement --- it is how you see what the host is paying to keep an engine fed
+--- but it is not the engine's IPC, and there is no way to get the engine's IPC
+from here. GPU, DSP and NPU hardware counters are not exposed on this board.
+
+\subsection{Reading a result correctly}
+
+\begin{lstlisting}
+r = p.run(saxpy(Backend.NPU, size=65536, timeout=300))
+
+r.ok                        # did it run at all
+r.fingerprint               # is the answer right
+r.compute_us                # engine-only time
+r.compute_key               # ...measured how? ('execute_us_mean' here)
+r.iterations                # ...covering how many repetitions?
+r.fields["finalize_us"]     # the compile cost you would pay in production
+r.wall_us                   # what an end-to-end user would actually feel
+r.raw                       # everything, unmodified, when the above disagree
+\end{lstlisting}
+
+% ============================================================================
+\section{Your own kernels: \texttt{custom}}
+\label{sec:custom}
+% ============================================================================
+
+\code{custom()} dispatches a binary you wrote, so adding a kernel never means
+editing \code{profiler.py}.
+
+\begin{lstlisting}
+from profiler import Profiler, Backend, custom
+
+p = Profiler()
+r = p.run(custom(Backend.CPU, "my_kernel", size=1048576, core="prime"))
+\end{lstlisting}
+
+\code{binary} is a filename under
+\code{/data/local/tmp/profiler-kernels/custom/}; the backend chooses the
+environment (library paths, affinity) exactly as for a registered kernel. Build
+and push with \code{python scripts/new\_kernel.py -{}-push <name>}.
+
+\subsubsection*{The output contract}
+
+Your kernel must print \textbf{one timing field}, chosen from
+\code{mean\_us}, \code{wall\_us}, \code{duration\_ns}, \code{dsp\_us} or
+\code{execute\_us\_mean}. This is required: a run with no time is reported as a
+failure, with the contract quoted in \code{Result.error}. Leaving it as a
+success produced a blank summary line and no error, which is the least helpful
+thing a first custom kernel can do.
+
+Optionally print \code{flop:}, \code{bytes:}, \code{fingerprint:} and
+\code{status:}. Only \code{OK}, \code{SUCCESS}, \code{PASS}, \code{PASSED} and
+\code{DONE} count as success; anything else marks the result failed. Most
+shipped kernels print no status at all and rely on the exit code.
+
+Either output style is parsed: \code{key=value} tokens anywhere on a line, or a
+\code{key: value} line on its own.
+
+\subsubsection*{Two limitations}
+
+\begin{itemize}[leftmargin=0.6cm]
+  \item \code{custom()} accepts \code{name}, \code{timeout}, \code{depends\_on}
+    and \code{core}, but \textbf{not} \code{threads}, \code{counters} or
+    \code{per\_core}. To use those, construct the \code{Task} directly with
+    \code{binary=}.
+  \item \code{custom} resolves binaries under \code{custom/} only. A registered
+    workload's binary cannot be driven through it --- which is why
+    \code{cachelat} is in the registry rather than left to \code{custom}: it
+    needs counters and lives in \code{cachelat/}.
+\end{itemize}
+
+% ============================================================================
+\section{Converted networks: \texttt{model}}
+\label{sec:models}
+% ============================================================================
+
+Networks are not kernels. They are DLC files executed by QAIRT's own
+\code{qnn-net-run}, and the engine is chosen by which QNN backend library is
+loaded --- \code{libQnnCpu.so}, \code{libQnnGpu.so} or \code{libQnnHtp.so}. One
+DLC runs on any of the three, so \textbf{the engine is the variable and the
+model is fixed}, which is the whole point of the case study.
+
+\begin{lstlisting}
+from profiler import Profiler, Backend, model
+
+p = Profiler()
+r = p.run(model(Backend.NPU, "minilm", reps=10))
+print(r.wall_us)                       # the only timing qnn-net-run gives
+
+for b in (Backend.CPU, Backend.GPU, Backend.NPU):
+    print(p.time_model(b, "mobilenetv2", reps=100))
+\end{lstlisting}
+
+\noindent The DSP is deliberately absent: QAIRT ships a QNN DSP backend, but
+provisioning does not push it, so listing it would advertise a dispatch that
+cannot run.
+
+\subsection{The model registry}
+
+\code{MODELS} maps a short name to its directory, DLC, input list, MAC count
+and kind. All eleven live under \code{/data/local/tmp}, staged separately from
+the kernel tree.
+
+\begin{longtable}{@{}p{2.7cm}p{1.5cm}p{1.6cm}p{8.2cm}@{}}
+\toprule
+\textbf{Name} & \textbf{Kind} & \textbf{MACs} & \textbf{Notes} \\
+\midrule
+\endhead
+\code{mobilenetv2} & cnn & 301\,M & depthwise-separable, linear topology \\
+\code{mnv2\_s1} & cnn & 120.8\,M & stage 1 of 3 (40\% of MACs) \\
+\code{mnv2\_s2} & cnn & 104.6\,M & stage 2 of 3 (35\%) \\
+\code{mnv2\_s3} & cnn & 75.3\,M & stage 3 of 3 (25\%) \\
+\code{minilm} & encoder & 15\,M & 6-layer BERT encoder, seq=128 \\
+\code{distilgpt2} & decoder & 88.4\,M & 6-layer decoder \textsc{prefill},
+  seq=128, no KV cache \\
+\code{qwen05\_dec32} & decoder & 494\,M & Qwen2.5-0.5B decode, 2.52\,GB DLC \\
+\code{llama1b\_dec32} & decoder & 1236\,M & Llama-3.2-1B decode, 6.00\,GB DLC \\
+\code{sd\_text\_encoder} & clip & 6.7\,G & CLIP text encoder, once per image \\
+\code{sd\_unet} & unet & 68\,G & distilled SD UNet, \textbf{once per denoising
+  step} \\
+\code{sd\_vae\_decoder} & vae & 1.3\,T & VAE decoder; the most engine-sensitive
+  stage on this board (8$\times$ spread) \\
+\bottomrule
+\end{longtable}
+
+\noindent The three \code{mnv2\_s*} stages exist so a network can be cut and the
+pieces placed on different engines. The diffusion trio is the pipeline where
+that actually pays: its stage boundary is a 64\,KB latent, cheap enough for a
+genuine multi-engine pipeline, which the LLM's 4.7\,MB KV handoff never allowed.
+
+\textbf{The decode models are fp32 and that is not a choice.} The CPU backend
+refuses fp16 DLCs (Discovery~71), so the DLCs are large and decode is
+weight-bound. \textbf{The diffusion text encoder takes token
+\emph{embeddings}, not ids}: the converter folds integer inputs away
+(Discovery~77), so the 77-row lookup happens on the host and only the twelve
+transformer layers run on device.
+
+\subsection{\texttt{model(backend, name, **params)}}
+
+\begin{longtable}{@{}p{2.3cm}p{12.4cm}@{}}
+\toprule
+\textbf{Argument} & \textbf{Meaning} \\
+\midrule
+\endhead
+\code{backend} & \code{Backend.CPU}, \code{.GPU} or \code{.NPU}. Anything else
+  raises. \\
+\code{name} & A key of \code{MODELS}. Unknown names raise, listing the known
+  ones. \\
+\code{reps} & \code{-{}-num\_inferences}: how many inferences one dispatch
+  performs. Default 1. \\
+\code{output\_dir} & Where \code{qnn-net-run} writes outputs on device.
+  Defaults to \code{run\_<model>\_<backend>}, and is deleted before each run. \\
+\code{name=} & Task name, defaulting to \code{model.<name>.<backend>}. \\
+\bottomrule
+\end{longtable}
+
+\noindent A \code{model} result has \textbf{no \code{compute\_us}} ---
+\code{qnn-net-run} prints no timing field the parser recognises. Its
+\code{wall\_us} is filled in by the profiler from the host round trip, and
+\code{ok} additionally requires the string \emph{``Finished Executing''} in the
+output. A model that was never staged fails with a message naming the command
+that stages it, rather than a bare \code{cd: No such file or directory}.
+
+\subsection{\texttt{time\_model(backend, name, reps=100)}}
+
+Graph preparation is paid once per dispatch and differs enormously by backend
+--- 0.16\,s on CPU, 0.52\,s on GPU, 0.59\,s on HTP for MobileNetV2 --- so a
+single timed run measures mostly compilation. \code{time\_model} runs the model
+twice, once with \code{reps=1} and once with \code{reps+1}, and subtracts. The
+subtraction cancels preparation and the constant \code{adb} round trip.
+
+\begin{lstlisting}
+{'model': 'mobilenetv2', 'backend': 'npu', 'ok': True,
+ 'per_inference_ms': 0.812, 'prepare_plus_one_ms': 604.3,
+ 'inferences_per_s': 1231.5, 'reps': 100, 'macs': 301000000.0}
+\end{lstlisting}
+
+\noindent \textbf{It refuses rather than returning a negative number.} The
+subtraction only cancels preparation if preparation costs the same in both
+runs, and it often does not --- a cold DLC read from storage can dominate the
+first run, after which the \code{reps+1} run comes back \emph{faster} in wall
+time and the per-inference figure goes negative. Reporting $-0.75$\,ms as a
+measurement is worse than reporting nothing, so the call returns
+\code{ok: False} with an error saying to raise \code{reps} until the
+per-inference signal outweighs the one-off load.
+
+% ============================================================================
+\section{Power estimation: \texttt{power()}}
+\label{sec:power}
+% ============================================================================
+
+\begin{lstlisting}
+p.power(matmul(Backend.CPU, size=1024))
+# {'available': True, 'power_w': 6.59, 'energy_j': 230.6, 'window_s': 35,
+#  'engine': 'cpu', 'boundary': '12V supply input',
+#  'scope': 'whole_board_not_per_engine', 'board_match': 'calibration_board'}
+\end{lstlisting}
+
+\subsection{Three things this is not}
+
+Each matters more than the number itself.
+
+\begin{description}[leftmargin=1.2cm,style=nextline,font=\normalfont\itshape]
+  \item[Not a measurement.] It is a calibrated \emph{model} of 12\,V
+    supply-input power, fitted against a bench supply. This board has no
+    readable PMIC rail --- the battery node is a \code{Debug\_Board} dummy
+    (Discovery~57) --- so there is nothing to read. The returned
+    \code{quality} is \code{modeled\_ballpark} for that reason.
+  \item[Not per-engine.] It predicts what the \emph{whole board} draws.
+    ``GPU watts'' is not a thing this can produce.
+  \item[Not per-dispatch.] The model is validated only over intervals of at
+    least \code{minimum\_validated\_interval\_s} (30\,s), so the task is looped
+    to fill \code{seconds} and the answer describes that window. A single
+    200\,\us{} dispatch has no modeled power. Asking for fewer seconds than the
+    artifact's validated interval returns \code{available: False}.
+\end{description}
+
+\subsection{Arguments}
+
+\begin{longtable}{@{}p{2.3cm}p{12.4cm}@{}}
+\toprule
+\textbf{Argument} & \textbf{Meaning} \\
+\midrule
+\endhead
+\code{task} & The \code{Task} to loop. One task, one engine. \\
+\code{seconds} & Window length, default 35. Must be $\geq$ the artifact's
+  validated interval (30\,s). \\
+\code{artifact} & Path to a power-model JSON. Default: the best available for
+  the attached board --- the SM8850 CPU/GPU artifact first, then the SM8750
+  ones, so a Hexagon calibration appears automatically the moment one lands. \\
+\bottomrule
+\end{longtable}
+
+\subsection{What each engine returns}
+
+\begin{longtable}{@{}p{1.6cm}p{13.1cm}@{}}
+\toprule
+\textbf{Engine} & \textbf{Status} \\
+\midrule
+\endhead
+CPU & Fitted from measurements. \\
+GPU & Fitted from measurements. \\
+NPU & \emph{Declared}, not fitted: 5\,W fp16, 4\,W int8, hand-entered from
+  operator readings. Returned with \code{validated: False} so a reader can tell
+  a fitted number from a typed-in one, and returned \emph{immediately} without
+  running a window --- running a 35\,s NPU window and then ignoring its features
+  would be theatre, and it is exactly the run that drives the die to 98\,\textdegree C
+  (Discovery~73). \\
+DSP & \code{available: False}, with a reason. An unsigned PD cannot cast the
+  HAP power vote the calibration needs. \textbf{Reporting unavailable is the
+  correct answer, not a fallback number} --- see ADRs 0019, 0020 and 0022. \\
+\bottomrule
+\end{longtable}
+
+\subsection{Board transfer}
+
+The model's coefficients were fitted on one specific board. \code{board\_match}
+says which case you are in:
+
+\begin{itemize}[leftmargin=0.6cm]
+  \item \code{calibration\_board} --- fitted on this exact unit.
+  \item \code{transferred\_eas\_verified} --- fitted elsewhere, and this board's
+    kernel energy model was checked against the calibration board's before the
+    coefficients were applied. More uncertainty in the absolute watts;
+    \emph{none} in a comparison between two runs on this board.
+\end{itemize}
+
+\noindent A serial mismatch with no EAS verification blocks the estimate
+outright. Two same-model HDK8850 units differed by 4.44\%/4.72\% in their
+vendor EAS tables, so the silicon genuinely is not identical.
+
+\subsection{Why there is no multi-engine power call}
+
+The model's concurrent-path terms are not summable
+(\code{concurrent\_path\_terms\_summable: false}), so there is no call that
+gives the power of a multi-engine pipeline. Measure each stage and add the
+\emph{energies}.
+
+\subsection{Operational notes}
+
+The call takes about a minute and prints a progress line to stderr, so it does
+not look hung. The device-side loop is given \code{seconds + 25} so it cannot
+end mid-window, which means it outlives the measurement; \code{power()} reaps
+it afterwards, because otherwise a second \code{power()} call lands while the
+first loop is still running and is refused with \emph{``compute clients are
+already running''}.
+
+\code{reason} explains why there is no number; \code{warnings} says what to
+distrust about one that is present. Read both.
+
+% ============================================================================
+\section{Command-line interface}
+% ============================================================================
+
+The module is runnable directly, for single points, for the catalogues, and for
+the demo tour.
+
+\begin{lstlisting}[style=sh]
+python profiler.py --demo
+python profiler.py --catalogue
+python profiler.py --list-counters
+
+python profiler.py matmul npu
+python profiler.py matmul gpu --variant best -p size=512
+python profiler.py reduction cpu --core prime -p size=4194304
+python profiler.py convolution cpu --core gold --threads 6 --counters cache --per-core
+python profiler.py convolution npu -p cin=64 -p cout=64 -v
+python profiler.py cachelat cpu -p kb=256 -p pattern=random --repeat 5
+python profiler.py custom cpu --binary my_kernel -p size=1048576
+python profiler.py saxpy dsp --serial 5cabf4fd
+\end{lstlisting}
+
+\begin{longtable}{@{}p{3.5cm}p{11.2cm}@{}}
+\toprule
+\textbf{Flag} & \textbf{Meaning} \\
+\midrule
+\endhead
+\code{-{}-demo} & Run the live tour. Also the default when no workload is
+  given. \\
+\code{-{}-catalogue} & Print every workload, backend, variant and applied
+  default, generated from the registry. \\
+\code{-{}-list-counters} & Print the presets, the 92 verified events by group,
+  and the 43 blocked ones with reasons. Exits without touching the device. \\
+\code{-{}-serial SERIAL} & Target one board when several are attached. \\
+\code{-v}, \code{-{}-verbose} & Print each generated device command. \\
+\code{-{}-variant NAME} & Kernel variant. \\
+\code{-{}-core SPEC} & Affinity: a core (\code{7}), a mask (\code{0xc0}), or
+  \code{prime}/\code{gold}/\code{all}. \\
+\code{-{}-threads N} & Worker threads (threaded variants only). \\
+\code{-{}-counters SPEC} & A preset name or a comma-separated event list. \\
+\code{-{}-per-core} & Break counter totals down per CPU. \\
+\code{-{}-counter-cpus SPEC} & Count per-CPU system-wide on these CPUs
+  (e.g.\ \code{0-5}) instead of per-process. \\
+\code{-p KEY=VAL} & A kernel parameter; repeatable. Values are coerced:
+  integers, then floats, then \code{true}/\code{false} into bare flags, else
+  left as a string. \\
+\code{-{}-repeat N} & Run the whole dispatch $N$ times and report mean, range
+  and coefficient of variation. \\
+\code{-{}-binary NAME} & With workload \code{custom}: the binary under the
+  device \code{custom/} directory. Rejected with any other workload. \\
+\bottomrule
+\end{longtable}
+
+\subsection{\texttt{-{}-repeat}: process repeats, not kernel iterations}
+
+\code{-{}-repeat N} runs $N$ separate \emph{processes}. That is the point:
+process-level repeats re-pay startup and let the governor settle differently
+each time, so the spread they expose is the spread a real caller would see. A
+kernel's own \code{-{}-iterations} cannot show you that --- it amortises it
+away.
+
+The summary picks whichever headline metric the workload actually reports
+(GFLOP/s, else GB/s, else \code{wall\_us}):
+
+\begin{lstlisting}[style=plain]
+    1  matmul.cpu    105234.1 us/iter x10    29.3 GFLOP/s  fp=1.3587e+03
+    2  matmul.cpu    106881.7 us/iter x10    28.9 GFLOP/s  fp=1.3587e+03
+    3  matmul.cpu    105902.4 us/iter x10    29.1 GFLOP/s  fp=1.3587e+03
+
+  n=3  GFLOP/s: mean 29.1  range 28.9-29.3  CoV 0.7%
+\end{lstlisting}
+
+\noindent Failed runs are excluded from the statistics and counted in a note.
+If the runs produce more than one distinct fingerprint, a warning says so ---
+they did not all compute the same answer, and the timing spread is the least of
+your problems.
+
+\noindent \textbf{One run is not a measurement.} \code{-{}-repeat} exists to
+make that easy to act on.
+
+% ============================================================================
+\section{Recipes}
+% ============================================================================
+
+\subsection{One roofline point on every engine}
+
+\begin{lstlisting}
+from profiler import Profiler, Backend, convolution
+
+p = Profiler()
+for r in p.run_serial([convolution(b, cin=8, cout=8) for b in Backend]):
+    if r.ok:
+        print(f"{r.task.backend}  {r.compute_us:10.1f} us  {r.gflops:8.1f} GFLOP/s")
+    else:
+        print(f"{r.task.backend}  FAILED: {r.error}")
+\end{lstlisting}
+
+\subsection{A parameter sweep written to CSV}
+
+\begin{lstlisting}
+import csv
+from profiler import Profiler, Backend, matmul
+
+p = Profiler()
+with open("matmul_gpu.csv", "w", newline="") as fh:
+    w = csv.writer(fh)
+    w.writerow(["size", "variant", "compute_us", "gflops", "fingerprint"])
+    for size in (128, 256, 512, 1024):
+        for variant in ("naive", "tiled", "anysize"):   # any-size variants only
+            r = p.run(matmul(Backend.GPU, size=size, variant=variant))
+            if r.ok:
+                w.writerow([size, variant, r.compute_us, r.gflops, r.fingerprint])
+\end{lstlisting}
+
+\subsection{Contention: the same batch, both ways}
+
+\begin{lstlisting}
+batch = [matmul(Backend.CPU, size=512), matmul(Backend.GPU, size=512, variant="best")]
+
+clean     = p.run(batch, parallel=False)
+contended = p.run(batch, parallel=True)
+
+for a, b in zip(clean, contended):
+    print(f"{a.task.name:20s} {a.compute_us:9.1f} -> {b.compute_us:9.1f} us "
+          f"({b.compute_us / a.compute_us:.2f}x)")
+\end{lstlisting}
+
+\subsection{CPU cluster and core study, with counters}
+
+\begin{lstlisting}
+for spec in ("prime", "gold", 7, 0):
+    r = p.run(reduction(Backend.CPU, size=4 << 20, core=spec,
+                        counters="basic", name=f"core_{spec}"))
+    d = r.derived
+    print(f"{str(spec):6s} {r.compute_us:9.1f} us  "
+          f"{d.get('effective_ghz', 0):.2f} GHz  "
+          f"{d.get('clock_of_max_pct', 0):5.1f}% of max  IPC={d.get('ipc', 0):.2f}")
+\end{lstlisting}
+
+\noindent Name the cluster. Under the default mask \code{clock\_of\_max\_pct}
+is absent, because cores 4--7 straddle the boundary (\S\ref{sec:affinity}).
+
+\subsection{Thread scaling, done so the answer means something}
+
+\begin{lstlisting}
+for n in (1, 2, 3, 4, 5, 6):
+    r = p.run(convolution(Backend.CPU, cin=32, cout=32, iterations=20,
+                          threads=n, core="gold", variant="neon",
+                          counters="cache", name=f"conv_{n}t"))
+    print(f"{n} threads  {r.compute_us_per_iter:9.1f} us/iter  "
+          f"IPC={r.derived.get('ipc', 0):.2f}  "
+          f"L2 miss={r.derived.get('l2d_miss_pct', 0):.2f}%")
+\end{lstlisting}
+
+\noindent Three things make this measurement honest rather than misleading:
+\code{iterations=20} so thread spawn is amortised (\S\ref{sec:threads});
+\code{core="gold"} so six threads have six cores; and \code{variant="neon"}
+because \code{scalar} would raise.
+
+\subsection{Scalar versus vectorised, on one engine}
+
+\begin{lstlisting}
+for variant in ("scalar", "neon"):
+    r = p.run(saxpy(Backend.CPU, size=1 << 22, variant=variant, core="prime"))
+    print(f"{variant:7s} {r.gbps:6.1f} GB/s")
+\end{lstlisting}
+
+\subsection{A pipeline expressed as a DAG}
+
+\begin{lstlisting}
+results = p.run_dag([
+    reduction(Backend.CPU, size=1 << 20, name="stage1"),
+    convolution(Backend.GPU, cin=16, cout=16, name="stage2a", depends_on=["stage1"]),
+    convolution(Backend.NPU, cin=16, cout=16, name="stage2b", depends_on=["stage1"]),
+    matmul(Backend.CPU, size=512, name="stage3", depends_on=["stage2a", "stage2b"]),
+])
+for name in ("stage1", "stage2a", "stage2b", "stage3"):
+    print(results[name].summary())
+\end{lstlisting}
+
+\subsection{Comparing engines on one network}
+
+\begin{lstlisting}
+for b in (Backend.CPU, Backend.GPU, Backend.NPU):
+    t = p.time_model(b, "mobilenetv2", reps=100)
+    if t["ok"]:
+        print(f"{b}  {t['per_inference_ms']:7.3f} ms  "
+              f"{t['inferences_per_s']:8.1f} inf/s  "
+              f"(prepare {t['prepare_plus_one_ms']:.0f} ms)")
+    else:
+        print(f"{b}  {t['error']}")
+\end{lstlisting}
+
+\subsection{Checking what will run, without a board}
+
+\begin{lstlisting}
+from profiler import build_command, DEVICE_BASE, WORKLOADS, Backend, matmul
+
+for variant in WORKLOADS["matmul"].kernels[Backend.GPU].variants:
+    print(f"{variant:16s} {build_command(matmul(Backend.GPU, variant=variant), DEVICE_BASE)}")
+\end{lstlisting}
+
+\subsection{A guarded sweep that reports its own failures}
+
+\begin{lstlisting}
+results, failures = [], []
+for size in (256, 512, 1024, 2048):
+    r = p.run(matmul(Backend.DSP, size=size, timeout=600))
+    (results if r.ok else failures).append(r)
+
+print(f"{len(results)} ok, {len(failures)} failed")
+for r in failures:
+    print(f"  {r.task.name} size={r.task.params['size']}: {r.error}")
+
+fps = {round(r.fingerprint, 6) for r in results if r.fingerprint is not None}
+if len(fps) > 1:
+    print(f"WARNING: {len(fps)} distinct fingerprints -- not all the same answer")
+\end{lstlisting}
+
+% ============================================================================
+\section{Extending the wrapper}
+% ============================================================================
+
+\subsection{Running a kernel without touching this file}
+
+Use \code{custom()} (\S\ref{sec:custom}). Nothing needs registering. This is the
+right answer for a one-off, for coursework, and for anything you are still
+iterating on.
+
+\subsection{Adding a variant to an existing kernel}
+
+Push the binary, then add one entry to the \code{variants} dict:
+
+\begin{lstlisting}
+Backend.GPU: KernelEntry("gpu", {"naive": "matmul_opencl_fp32",
+                                 "mine":  "matmul_opencl_fp32_mine"},
+                         "naive", ldpath="."),
+\end{lstlisting}
+
+\noindent If it is compiled for one shape only, add it to \code{fixed\_size} so
+the guard fires on the host. If it accepts \code{-{}-threads}, add it to
+\code{threaded\_variants}.
+
+\subsection{Adding a backend to an existing workload}
+
+Add a \code{KernelEntry} under the new \code{Backend} key. The environment
+(working directory, library paths, affinity, counter prefix) is applied by
+backend, so nothing else changes. If the kernel spells a parameter differently,
+add a \code{param\_map} entry rather than making callers remember it.
+
+\subsection{Adding a whole workload}
+
+Add a \code{Workload} to \code{WORKLOADS} with its \code{kernels} table, and a
+\code{flop\_fn} / \code{bytes\_fn} if the kernels do not print their own counts.
+Then add a module-level constructor:
+
+\begin{lstlisting}
+def myworkload(backend: Backend, **params) -> Task:
+    """One line saying what the workload is for and where it sits on the roofline."""
+    return _task("myworkload", backend, params)
+\end{lstlisting}
+
+\noindent Add the name to \code{\_\_all\_\_}, or \code{from profiler import *}
+will silently not bind it.
+
+\subsection{Adding a new timing field}
+
+Append it to \code{\_COMPUTE\_FIELDS} in priority order. If the new field is a
+\emph{total} across repetitions rather than a per-dispatch figure, also add it
+to \code{\_TOTAL\_COMPUTE\_FIELDS} --- otherwise throughput is wrong by exactly
+the iteration count (\S\ref{sec:iterations}).
+
+\subsection{Adding a derived counter metric}
+
+Append a tuple to \code{\_DERIVED}: \code{(name, numerator candidates,
+denominator candidates, scale)}. The first candidate present wins, and the
+metric is computed only when both sides exist --- so a metric that needs events
+the caller did not select simply does not appear, rather than appearing as
+zero.
+
+% ============================================================================
+\section{Semantics, caveats, and measurement validity}
+\label{sec:caveats}
+% ============================================================================
+
+\subsection{The caveats that change conclusions}
+
+\begin{description}[leftmargin=0.8cm,style=nextline,font=\normalfont\bfseries]
+  \item[NPU and DSP do not run in parallel.] They share the Hexagon cDSP.
+    Parallel submission looks right from the host and serialises in hardware.
+    \S\ref{sec:parallel}.
+  \item[The DSP cannot pin its own clock.]
+    \label{sec:dspclock}
+    HAP power voting is refused from the unsigned PD we run in
+    (\code{0x80000414}), with no testsig installed. Compute over FastRPC works
+    fine; only the power vote does not. \textbf{Consequence: DSP numbers are
+    unpinned and vary more than the other backends.} Two identical DSP runs
+    differing by 50\% is normal, not a bug. Use \code{-{}-repeat} and quote a
+    spread.
+  \item[A busy NPU makes the DSP faster.] Same shared DVFS domain. A DSP kernel
+    measured beside an NPU peer can be 1.59$\times$ faster than the same kernel
+    alone. Every DSP figure here is the idle-Hexagon case.
+  \item[The default affinity mask spans two clusters.] \code{core=None} is cores
+    4--7: two Gold, two Prime. Name the cluster for anything you will quote.
+    \S\ref{sec:affinity}.
+  \item[Defaults are not the fastest variant.] GPU matmul defaults to
+    \code{naive}, about 16$\times$ off \code{best}. Deliberate, and fatal to a
+    cross-engine comparison if forgotten.
+  \item[NPU SAXPY needs a long timeout.] QNN has no native SAXPY operator, so
+    the graph decomposes into thousands of tiles and \code{finalize\_us} runs
+    50--110 seconds. The default 180\,s timeout is not always enough; pass
+    \code{timeout=300}. The wait \emph{is} the finding.
+  \item[GPU counters are not available.] Adreno perfcounters are blocked on this
+    build. Counters on a GPU task measure the host process.
+    \S\ref{sec:accelcounters}.
+  \item[Never run \code{adb root}.] It restarts \code{adbd} in a domain that
+    cannot reach the OpenCL ICD, so every GPU dispatch fails with
+    \code{clGetPlatformIDs} $= -1001$. Counters use \code{su 0}, which is a
+    different and safe mechanism. \S\ref{sec:su}.
+  \item[The NPU can destabilise the board in still air.] A sustained fp16 graph
+    reached 98\,\textdegree C with mitigation engaged, at only 4--5\,W, and the
+    board dropped off USB. Power density, not total power. Do not leave a
+    sustained NPU sweep running unattended without airflow.
+  \item[Thermals are tighter than the previous board.] This HDK cannot hold its
+    top GPU or CPU operating points under load in still air. Several published
+    calibration setpoints sit below the top of the ladder for that reason.
+\end{description}
+
+\subsection{Checking a number before you quote it}
+
+\begin{enumerate}[leftmargin=0.8cm]
+  \item \code{r.ok} is \code{True}.
+  \item \code{r.fingerprint} matches a known-good run. A fast wrong answer is
+    still wrong.
+  \item \code{r.compute\_key} is the field you think it is, and
+    \code{r.iterations} is what you asked for.
+  \item \code{r.below\_max\_clock} is \code{False}, or you know why it is not.
+  \item \code{r.multiplexed} is \code{False} if you are reading counter values.
+  \item You ran it more than once (\code{-{}-repeat}) and the coefficient of
+    variation is small enough to support the claim.
+  \item The comparison is like-for-like: same variant class, same sizes, same
+    serial-versus-parallel mode.
+\end{enumerate}
+
+% ============================================================================
+\section{Troubleshooting}
+% ============================================================================
+
+\begin{longtable}{@{}p{5.1cm}p{9.6cm}@{}}
+\toprule
+\textbf{Symptom} & \textbf{Cause and fix} \\
+\midrule
+\endhead
+\code{ValueError: unknown workload} & Typo, or a workload that does not exist.
+  The message lists the known ones. \\
+\code{ValueError: X has no Y kernel} & That workload does not run on that
+  engine --- \code{nbody} has no NPU, \code{cachelat} is CPU-only. The message
+  lists the backends it does have. \\
+\code{ValueError: ... has no variant} & Typo. The message lists every valid
+  variant and often a ``did you mean''. \\
+\code{ValueError: compiled for size=512 only} & A register-blocked GPU variant.
+  Use \code{anysize}, \code{naive}, \code{tiled}, \code{vec4} or \code{fp16}
+  to sweep sizes. \S\ref{sec:fixedsize}. \\
+\code{ValueError: ... does not accept -{}-threads} & That variant is
+  single-threaded; the message names the threaded ones. \S\ref{sec:threads}. \\
+\code{ValueError: counter ... reads a constant 0} & The event is not
+  implemented on this silicon. The message names the substitute.
+  \S\ref{sec:counters}. \\
+Result \code{ok=False}, error mentions \code{No such file} & The binary was
+  never pushed. Re-run \code{provision\_device.py}, then
+  \code{adb shell ls} the directory to confirm --- \emph{``1 file pushed''} is
+  not evidence. \\
+Every counter run fails, no counters at all & \code{su 0} is unavailable, or
+  you are on a build where the shell domain cannot open the PMU and \code{su}
+  is absent. Everything except counters still works. \\
+Exit code 124 in \code{error} & Timeout. Raise \code{timeout=}; for NPU SAXPY
+  use 300\,s or more. \\
+Blank summary, \code{ok=False}, ``printed no timing field'' & A custom kernel
+  that does not meet the output contract. \S\ref{sec:custom}. \\
+Throughput looks wrong by exactly $10\times$ or $50\times$ & An iteration
+  accounting mismatch. Check \code{r.compute\_key} and \code{r.iterations}.
+  \S\ref{sec:iterations}. \\
+GFLOP/s right, timing right, but for the wrong shape & A parameter the kernel
+  ignored. Turn on \code{verbose=True} and read the command. \\
+GPU dispatches all fail with \code{-1001} & Somebody ran \code{adb root}.
+  \code{adb unroot} and reconnect. \\
+\code{power()} returns \code{available: False} for the DSP & Working as
+  designed --- the DSP is not calibrated and will not be guessed at.
+  \S\ref{sec:power}. \\
+\code{power()} says ``compute clients are already running'' & A previous
+  \code{power()} loop has not been reaped. Wait 25\,s, or
+  \code{adb shell pkill -f profiler\_power\_loop}. \\
+\code{time\_model} returns negative per-inference time & Load noise exceeded
+  the signal. Raise \code{reps}. \S\ref{sec:timemodel}. \\
+Results differ between two identical DSP runs & Expected: the DSP clock is
+  unpinned. \S\ref{sec:dspclock}. \\
+\code{adb} dies mid-sweep & Intermittent on this board. The provisioner is
+  idempotent and sweeps are restartable; re-run. \\
+\bottomrule
+\end{longtable}
+
+% ============================================================================
+\appendix
+\section{Counter catalogue}
+\label{sec:counterappendix}
+% ============================================================================
+
+\noindent\emph{Generated equivalent:} \code{python profiler.py -{}-list-counters}.
+92 events are verified on this silicon, across ten groups. Each was run against
+a memory-heavy workload on both clusters and returned a non-zero count.
+\textbf{Note this checks that a
+counter counts, not that its value is correct.}
+
+\begin{longtable}{@{}p{2.2cm}p{0.9cm}p{11.4cm}@{}}
+\toprule
+\textbf{Group} & \textbf{N} & \textbf{What it covers} \\
+\midrule
+\endhead
+\code{core} & 3 & \code{cpu-cycles}, \code{instructions}, \code{bus-cycles}. \\
+\code{branch} & 9 & Retired and speculative branches, predictor hits and
+  misses, split by direct / indirect / return. \\
+\code{cache} & 20 & L1D, L1I and L2 accesses, refills, reads, writes,
+  writebacks, allocations, long-latency misses, and L1D refills split by inner
+  (on-cluster) vs outer (off-cluster). \\
+\code{prefetch} & 7 & Accesses generated by the \emph{hardware} prefetcher
+  (\code{*-hwprf}) versus by software \code{PRFM} instructions
+  (\code{*-prfm}). A sequential stream drives \code{hwprf} hard; a pointer
+  chase does not, and that contrast is the experiment. \\
+\code{tlb} & 18 & L1 dTLB/iTLB, L2 unified TLB, refills, and page-table walks
+  including walk depth (\code{*-step}) and whether the walk resolved to a large
+  or a small page. \\
+\code{stalls} & 9 & Frontend and backend stalls in both cycles and issue slots,
+  plus memory-attributed backend stalls. Slots are finer than cycles. \\
+\code{mix} & 8 & Retired vs speculative instructions and micro-ops, loads,
+  stores, integer data-processing, and FP/SIMD. \textbf{NEON counts under
+  \code{raw-vfp-spec}}, not \code{raw-ase-inst-spec}, which reads zero. \\
+\code{memory} & 4 & Memory accesses (total, read, write) and bus/interconnect
+  accesses. \\
+\code{exceptions} & 2 & Exceptions taken and returned. \\
+\code{aliases} & 12 & simpleperf's friendlier \code{hw-cache} names for events
+  already listed above (\code{L1-dcache-loads}, \code{dTLB-load-misses}, and so
+  on). Same silicon events. \\
+\bottomrule
+\end{longtable}
+
+\subsection{Derived metrics}
+
+Computed automatically from whichever events are present. A metric whose
+numerator or denominator is missing simply does not appear.
+
+\begin{longtable}{@{}p{4.3cm}p{10.4cm}@{}}
+\toprule
+\textbf{Metric} & \textbf{Definition} \\
+\midrule
+\endhead
+\code{ipc}, \code{cpi} & instructions / cycles, and its reciprocal \\
+\code{branch\_miss\_pct} & mispredicts / branches \\
+\code{l1d\_miss\_pct}, \code{l1i\_miss\_pct}, \code{l2d\_miss\_pct} &
+  refills / accesses, per level \\
+\code{l1dtlb\_miss\_pct}, \code{l2dtlb\_miss\_pct} & TLB refills / TLB
+  accesses \\
+\code{pagewalks\_per\_kinst} & data page-table walks per thousand instructions \\
+\code{frontend\_stall\_pct}, \code{backend\_stall\_pct} & stall cycles / total
+  cycles \\
+\code{mem\_stall\_pct} & memory-attributed backend stalls / cycles \\
+\code{slot\_backend\_pct} & backend-lost issue slots / total lost slots \\
+\code{l1d\_wb\_per\_kinst} & L1D writebacks per thousand instructions \\
+\code{l1d\_hwprf\_pct}, \code{l2d\_hwprf\_pct} & share of cache traffic the
+  \emph{hardware prefetcher} generated rather than the program \\
+\code{spec\_waste\_pct} & $1 - \text{retired}/\text{speculative}$: the fraction
+  of executed instructions that never retired \\
+\code{effective\_ghz} & measured clock, from cycles over simpleperf's window
+  (\S\ref{sec:clock}) \\
+\code{clock\_of\_max\_pct} & effective clock as a percentage of the cluster
+  ceiling \\
+\code{scaling\_cur\_freq\_ghz} & the governor's \emph{requested} clock, sampled
+  during the run \\
+\bottomrule
+\end{longtable}
+
+\section{Glossary of the numbers this document quotes}
+
+\begin{longtable}{@{}p{4.3cm}p{10.4cm}@{}}
+\toprule
+\textbf{Constant} & \textbf{Value and meaning} \\
+\midrule
+\endhead
+\code{DEVICE\_BASE} & \code{/data/local/tmp/profiler-kernels} \\
+\code{MODEL\_DIR} & \code{/data/local/tmp} --- networks are staged outside the
+  kernel tree \\
+\code{CLUSTER\_MAX\_GHZ} & \code{\{"gold": 3.6288, "prime": 4.3968\}} --- the
+  top of each cluster's published OPP ladder \\
+\code{CLOCK\_FLAG\_RATIO} & \code{0.80} --- below this fraction of the ceiling,
+  \code{below\_max\_clock} is set \\
+\code{MAX\_HW\_COUNTERS} & \code{12} --- PMU counters per core; beyond this
+  simpleperf multiplexes \\
+default \code{timeout} & 180.0 seconds \\
+default \code{core} & mask \code{f0}, cores 4--7 \\
+default \code{power()} window & 35 s, against a 30 s validated minimum \\
+\bottomrule
+\end{longtable}
+
+\vfill
+\noindent\rule{\linewidth}{0.4pt}\\[2pt]
+\small
+Document revision 2.0. The catalogues here are hand-maintained;
+\code{-{}-catalogue} and \code{-{}-list-counters} are generated and
+authoritative.
+
+\end{document}

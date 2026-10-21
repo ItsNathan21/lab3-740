@@ -1,0 +1,16 @@
+// dsp_hello.idl — Phase 6 Step 3: FastRPC bring-up / capability probe
+//
+// Two functions:
+//   ping  — verifies round-trip (result = val + 1)
+//   get_caps — reports HVX unit encoding, total VTCM, available VTCM
+//
+// Target: cDSP v79, unsigned PD, fastrpc_shell_unsigned_3
+
+#include "remote.idl"
+
+interface dsp_hello : remote_handle64 {
+    long ping(in long val, rout long result);
+    long get_caps(rout long hvx_units,
+                  rout long vtcm_total_kb,
+                  rout long vtcm_avail_kb);
+};

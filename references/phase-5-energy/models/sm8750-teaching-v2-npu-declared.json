@@ -1,0 +1,251 @@
+{
+  "android_build_fingerprint": "qti/sun/sun:15/AQ3A.240801.002/eng.lnxbui.00000000.000000:userdebug/test-keys",
+  "artifact_schema_version": 2,
+  "boundary": "HDK8750_12V_supply_input",
+  "calibration_board_serial": "cead6f2e",
+  "calibration_control_config": {
+    "cpu": "target policy pinned min=max; cpuidle/retention left at deployment default; governor walt",
+    "gpu": "min_pwrlevel=max_pwrlevel pinned; IFPC/ACD/pwrscale left unchanged; force_* never written (SELinux)"
+  },
+  "calibration_dataset_hash": "7da937b067b6460689d0ff842712958826216a7cb4edb000cb1f18b925938f53",
+  "calibration_temperature_range": {
+    "by_sensor": {
+      "cpu-0-5-0": {
+        "max_c": 88.4,
+        "min_c": 26.1
+      },
+      "cpu-1-0-0": {
+        "max_c": 95.8,
+        "min_c": 24.8
+      },
+      "ddr": {
+        "max_c": 64.9,
+        "min_c": 24.9
+      },
+      "gpuss-0": {
+        "max_c": 61.0,
+        "min_c": 25.8
+      }
+    },
+    "dropped_dead_sensors": [
+      "socd"
+    ],
+    "source": "observed_raw_telemetry"
+  },
+  "coefficient_names": [
+    "floor_F",
+    "gain_gold",
+    "gain_prime",
+    "gpu_d0",
+    "gpu_d1",
+    "gpu_d2",
+    "dP_npu"
+  ],
+  "cpu_idle_basis": {
+    "note": "zero: v1 fitted against absolute EAS*util, not idle-subtracted features",
+    "semantics": "max_zero_absolute_eas_util_minus_median_idle_anchor",
+    "x_gold": 0.0,
+    "x_prime": 0.0
+  },
+  "derived_from": {
+    "artifact": "sm8750-teaching-v1",
+    "method": "schema translation plus a declared (unfitted) NPU term",
+    "tool": "scripts/power_artifact_from_v1.py"
+  },
+  "eas_table_hash": "34142edc41de1432816fb9532b9a5456f567b38fb437b90525fd48e3e123f2b3",
+  "feature_order": [
+    "activity_fraction",
+    "x_gold",
+    "x_prime",
+    "gpu_g0",
+    "gpu_g1",
+    "gpu_g2",
+    "npu_active"
+  ],
+  "fit_input_hash": "2cd4bd28ed4de291da4d7a87c03b79d9dbcf35cba8c3587756e94e49ed142247",
+  "gpu_ramp": {
+    "knots_hz": [
+      222000000.0,
+      660000000.0,
+      1100000000.0
+    ],
+    "units": "Hz"
+  },
+  "hexagon_runtime_provenance": {
+    "declared": false,
+    "reason": "no Hexagon window is calibrated in this profile"
+  },
+  "hexagon_subsystem": {
+    "coefficient_scope": "whole_system_increment_after_common_floor_and_other_joint_features",
+    "concurrent_npu_dsp_supported": false,
+    "concurrent_path_terms_summable": false,
+    "dsp_calibrated": false,
+    "dsp_uncalibrated_reason": "unsigned PD refuses the HAP lab power vote 0x80000414 (discovery 64)",
+    "feature_semantics": "duration_weighted_workload_intent_fraction",
+    "frequency_scaled": false,
+    "hardware_domain": "Hexagon_cDSP",
+    "hardware_serialized": true,
+    "npu_calibrated": false,
+    "npu_declared": true,
+    "npu_declared_reason": "operator meter readings at the 12 V input; no stationary window is capturable without active cooling (discovery 73)",
+    "npu_validated": false,
+    "path_term_semantics": "declared_operator_meter_single_point",
+    "paths": [
+      "QNN_HTP_v79"
+    ],
+    "physical_shared_path_decomposition": false,
+    "uncalibrated_peer_path": "FastRPC_user_PD"
+  },
+  "holdout_window_ids": [
+    "gold6_mid",
+    "gpu_832"
+  ],
+  "idle_anchor_power_w": [
+    0.684,
+    0.6999960000000001,
+    0.78
+  ],
+  "kernel_release": "6.6.30-android15-8-maybe-dirty-4k",
+  "known_unmodeled_terms": [
+    "DSP",
+    "NPU",
+    "NPU/DSP internal frequency and utilization",
+    "NPU/DSP workload-class variation within a path",
+    "PMIC-efficiency",
+    "cross-board transfer",
+    "high-OPP thermal mitigation (invisible to cpufreq)",
+    "memory/DDR/LLCC",
+    "precision",
+    "thermal-leakage"
+  ],
+  "minimum_validated_interval_s": 30.0,
+  "model_equation_version": "teaching-power-v2",
+  "model_profile": "npu_declared",
+  "model_version": "sm8750-teaching-v2-npu-declared",
+  "named_coefficients": {
+    "dP_npu": {
+      "units": "W_per_npu_active_fraction",
+      "value": 4.1029
+    },
+    "floor_F": {
+      "units": "W_per_activity_fraction",
+      "value": 0.1971125701304767
+    },
+    "gain_gold": {
+      "units": "W_per_(EAS_W*util)",
+      "value": 11.315049024084335
+    },
+    "gain_prime": {
+      "units": "W_per_(EAS_W*util)",
+      "value": 16.25215262052652
+    },
+    "gpu_d0": {
+      "units": "W_per_(busy*phi)",
+      "value": 2.193086314256103
+    },
+    "gpu_d1": {
+      "units": "W_per_(busy*phi)",
+      "value": 2.1591166826883113
+    },
+    "gpu_d2": {
+      "units": "W_per_(busy*phi)",
+      "value": 1.7255322381925309
+    }
+  },
+  "npu_declared": {
+    "boundary": "HDK8750_12V_supply_input",
+    "caveats": [
+      "single operator reading per precision, not a fitted coefficient",
+      "no holdout window; the NPU gates were not evaluated",
+      "read during a window that never reached a thermal plateau",
+      "observed spread across readings was about +/-25%",
+      "precision is an unmodeled term: fp16/int8 are recorded, not fitted"
+    ],
+    "default_precision": "fp16",
+    "increments_w": {
+      "fp16": 4.1029,
+      "int8": 3.1029
+    },
+    "source": "operator_meter_single_point",
+    "totals_w": {
+      "fp16": 5.0,
+      "int8": 4.0
+    },
+    "validated": false
+  },
+  "quality": "declared_unvalidated",
+  "quiescent_power_w": 0.6999960000000001,
+  "scope": "whole_system",
+  "source_session_hash_algorithm": "sha256-project-canonical-json-v1",
+  "source_session_hashes": {
+    "v1_dataset": "7da937b067b6460689d0ff842712958826216a7cb4edb000cb1f18b925938f53"
+  },
+  "supported_cpu_gpu_opps": {},
+  "supported_dsp_power_modes": [],
+  "supported_perf_modes": [],
+  "telemetry_aggregation_version": "agg-v2",
+  "train_window_ids": [
+    "floor",
+    "gold6_lo",
+    "gold6_hi",
+    "prime2_hi",
+    "gpu_222",
+    "gpu_660",
+    "gpu_1100"
+  ],
+  "validation_observed": {
+    "baselines": {
+      "constant_total": {
+        "holdout_mae_w": 0.6726662857142864,
+        "value_w": 5.327333714285714
+      },
+      "cpu_eas_only": {
+        "F_w": 0.524220744882026,
+        "g": 12.452634215485832,
+        "holdout_mae_w": 1.2902746182643021
+      },
+      "gpu_active_constant": {
+        "c_w": 4.516671999999999,
+        "holdout_mae_w": 0.5833280000000016
+      },
+      "idle_plus_active": {
+        "c_w": 4.627337714285714,
+        "holdout_mae_w": 0.6726662857142856
+      }
+    },
+    "concurrency_check": {
+      "abs_error_w": 0.469,
+      "interaction_term_w": -0.0,
+      "measured_w": 15.3,
+      "n_points": 1,
+      "note": "One operating point only. Additivity is NOT established in general (other freq/engine/memory-intensity combinations untested).",
+      "predicted_w": 14.831,
+      "rel_error": 0.0307,
+      "verdict": "additive at this operating point; single-engine-trained model predicted a concurrent workload to 3.1% (not in training set)",
+      "window": "combined_cpu_gpu (6 Gold @2.4GHz + GPU @1100MHz)"
+    },
+    "design_hash": "bb0f5a0f3019471ce66f0dd63eb747350d7b1c155e66961af165ddc33553b061",
+    "design_profile": "reduced_v1",
+    "gate": {
+      "checks": {
+        "beats_constant": true,
+        "beats_idle_plus_active": true,
+        "cpu_beats_eas_only": true,
+        "gpu_beats_active_constant": true,
+        "has_cpu_holdout": true,
+        "has_gpu_holdout": true,
+        "holdout_ids_match": true
+      },
+      "passed": true
+    },
+    "idle_subtracted_mae_w": 0.3016397082237301,
+    "is_prediction_interval": false,
+    "max_total_relative_error": 0.06311514417987642,
+    "n_holdout": 2,
+    "note": "Descriptive calibration result; no coverage guarantee.",
+    "source_session_hash_algorithm": "sha256-project-canonical-json-v1",
+    "source_session_hashes": {
+      "v1_dataset": "7da937b067b6460689d0ff842712958826216a7cb4edb000cb1f18b925938f53"
+    }
+  }
+}

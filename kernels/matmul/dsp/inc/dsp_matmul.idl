@@ -1,0 +1,33 @@
+#include "remote.idl"
+
+interface dsp_matmul : remote_handle64 {
+    // C = A * B, all row-major fp32, square N×N.
+    // dsp_us: DSP-side compute time only (excludes FastRPC overhead).
+    long matmul_fp32(in  sequence<float> a_data,
+                     in  sequence<float> b_data,
+                     rout sequence<float> c_data,
+                     in  long n,
+                     rout long dsp_us);
+
+    // HVX-vectorized variant: 32 float32 per HVX vector (128B-wide contexts).
+    // Accumulates in QF32 space; final output rounded back to IEEE float32.
+    long matmul_hvx_fp32(in  sequence<float> a_data,
+                         in  sequence<float> b_data,
+                         rout sequence<float> c_data,
+                         in  long n,
+                         rout long dsp_us);
+
+    // HVX + VTCM variant: copies B into 8 MB VTCM scratchpad before the
+    // compute loop, eliminating L2 cache misses on the stride-2048 B access.
+    // dsp_us includes VTCM setup (memcpy of B) + HVX compute.
+    long matmul_hvx_vtcm_fp32(in  sequence<float> a_data,
+                               in  sequence<float> b_data,
+                               rout sequence<float> c_data,
+                               in  long n,
+                               rout long dsp_us);
+
+    // Set DSP-side power mode before a variance sweep.
+    // mode 0 = BASELINE (restore default DCVS + LPM).
+    // mode 1 = LAB      (disable DCVS, lock TURBO corner, disable all LPM/sleep).
+    long set_power_mode(in long mode);
+};

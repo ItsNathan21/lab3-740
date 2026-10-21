@@ -1,0 +1,53 @@
+#!/usr/bin/env bash
+# android-clang — host-side stand-in for the control container's wrapper.
+#
+# The 38 kernel build.sh scripts all require `android-clang` on PATH and refuse
+# to run without it, which tied every kernel build to the Docker image. A real
+# NDK already bakes in --target and --sysroot via its own
+# aarch64-linux-android<api>-clang, so on the host the wrapper is just a lookup.
+#
+#   export PATH="$PWD/tools:$PATH"
+#   export NDK_ROOT=/path/to/android-ndk-r27d          # or let it search
+#   bash kernels/saxpy/cpu/neon_handtuned/build.sh
+#
+# API level 31 matches the NDK path the DSP stub scripts use. The board runs
+# Android 15 (API 35), so 31 is a floor, not a ceiling.
+
+set -euo pipefail
+
+API="${ANDROID_API:-31}"
+
+# 1. NDK_ROOT if set; otherwise the usual install spots.
+_candidates=()
+[ -n "${NDK_ROOT:-}" ] && _candidates+=("$NDK_ROOT")
+_candidates+=(
+    "$(cd "$(dirname "$0")/.." && pwd)/.toolchain/android-ndk-r27d"   # install.py --fix
+    "$HOME/Downloads/android-ndk-r27d-windows/android-ndk-r27d"
+    "$HOME/Downloads/android-ndk-r27c"
+    "/opt/android-ndk-r27c"
+    "${LOCALAPPDATA:-/nonexistent}/Android/Sdk/ndk"
+    "$HOME/Android/Sdk/ndk"
+)
+
+_cc=""
+for root in "${_candidates[@]}"; do
+    [ -d "$root" ] || continue
+    # An SDK "ndk" dir holds versioned subdirs; a real NDK holds toolchains/.
+    for base in "$root" "$root"/*/; do
+        [ -d "$base/toolchains/llvm/prebuilt" ] || continue
+        for host in linux-x86_64 windows-x86_64 darwin-x86_64 darwin-arm64; do
+            cand="$base/toolchains/llvm/prebuilt/$host/bin/aarch64-linux-android$API-clang"
+            if   [ -x "$cand"      ]; then _cc="$cand";      break 3
+            elif [ -f "$cand.cmd"  ]; then _cc="$cand.cmd";  break 3   # Windows NDK
+            fi
+        done
+    done
+done
+
+if [ -z "$_cc" ]; then
+    echo "android-clang: no NDK found. Set NDK_ROOT to an Android NDK r27+." >&2
+    echo "  tried: ${_candidates[*]}" >&2
+    exit 1
+fi
+
+exec "$_cc" "$@"

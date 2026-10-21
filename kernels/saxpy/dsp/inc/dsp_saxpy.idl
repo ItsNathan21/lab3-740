@@ -1,0 +1,26 @@
+#include "remote.idl"
+
+// SAXPY on the cDSP v79 — out = alpha*x + y, fp32. Memory-bound anchor for the
+// roofline. dsp_us is DSP-side compute-only time (excludes FastRPC transport,
+// which for a bandwidth-bound kernel is expected to dominate the wall time).
+interface dsp_saxpy : remote_handle64 {
+
+    // Scalar baseline: plain loop, no HVX.
+    long saxpy_fp32(in  sequence<float> x,
+                    in  sequence<float> y,
+                    in  float alpha,
+                    rout sequence<float> result,
+                    in  long n,
+                    rout long dsp_us);
+
+    // HVX-vectorized: 32 float32 per 128B HVX vector.
+    long saxpy_hvx_fp32(in  sequence<float> x,
+                        in  sequence<float> y,
+                        in  float alpha,
+                        rout sequence<float> result,
+                        in  long n,
+                        rout long dsp_us);
+
+    // DSP-side power mode: 0 = BASELINE (default DCVS/LPM), 1 = LAB (TURBO, no sleep).
+    long set_power_mode(in long mode);
+};

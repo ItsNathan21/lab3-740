@@ -1,0 +1,25 @@
+#include "remote.idl"
+
+// Sum-reduction on the cDSP v79 — sum = sum(x_i), fp32. Read-only memory-bound
+// anchor. The DSP returns a single scalar, so the FastRPC OUTPUT copy collapses
+// to 4 bytes (only the N-float input is marshaled in) — the DSP analogue of the
+// reduction R-i finding: unlike SAXPY, there is no per-element result to copy
+// back. dsp_us is DSP-side compute-only time (excludes FastRPC transport).
+interface dsp_reduction : remote_handle64 {
+
+    // Scalar baseline: plain single-accumulator loop, no HVX.
+    long reduce_fp32(in  sequence<float> x,
+                     rout float sum,
+                     in  long n,
+                     rout long dsp_us);
+
+    // HVX-vectorized: 32 float32 lanes accumulated per 128B HVX vector, then a
+    // horizontal fold of the 32 lanes at the end.
+    long reduce_hvx_fp32(in  sequence<float> x,
+                         rout float sum,
+                         in  long n,
+                         rout long dsp_us);
+
+    // DSP-side power mode: 0 = BASELINE (default DCVS/LPM), 1 = LAB (TURBO, no sleep).
+    long set_power_mode(in long mode);
+};

@@ -1,0 +1,72 @@
+#include "remote.idl"
+
+// Direct 2D convolution on the cDSP v79 — out = conv2d(in, weights), fp32, dense
+// KxK, stride 1, same zero padding, NHWC in/out, OHWI weights. Roofline mid-AI
+// point (AI ~2.25*C for Cin=Cout=C). FastRPC marshals input + weights IN and the
+// full HxWxCout output back OUT (unlike reduction, output transport is non-trivial).
+// dsp_us is DSP-side compute-only (excludes FastRPC transport).
+interface dsp_conv : remote_handle64 {
+
+    // Scalar baseline: plain nested loops, no HVX.
+    long conv_fp32(in  sequence<float> input,
+                   in  sequence<float> weights,
+                   rout sequence<float> result,
+                   in  long H, in long W,
+                   in  long Cin, in long Cout, in long K,
+                   rout long dsp_us);
+
+    // HVX-vectorized: the input-channel reduction is accumulated in 32-lane HVX
+    // vectors (efficient at Cin>=32; degrades toward scalar at small Cin).
+    long conv_hvx_fp32(in  sequence<float> input,
+                       in  sequence<float> weights,
+                       rout sequence<float> result,
+                       in  long H, in long W,
+                       in  long Cin, in long Cout, in long K,
+                       rout long dsp_us);
+
+    // INT8 convolution: signed int8 activations and weights, int32 accumulate.
+    // HVX's native regime — one 128-byte vector holds 128 int8 lanes against
+    // only 32 fp32, and vrmpy does a 4-way byte dot product per word lane.
+    // Integer math is exact, so this must agree bit-for-bit with the CPU int8
+    // kernel. Requires Cin % 4 == 0 (a scalar tail handles the remainder).
+    long conv_int8(in  sequence<octet> input,
+                   in  sequence<octet> weights,
+                   rout sequence<long> result,
+                   in  long H, in long W,
+                   in  long Cin, in long Cout, in long K,
+                   rout long dsp_us);
+
+    // VTCM characterization probe (staff answer-key generation for Lab 4 Tasks 4/5).
+    //   mode 0: query capacity          -> a=page_size, b=page_count
+    //   mode 1: acquire size_bytes once -> ok
+    //   mode 2: two acquires of size_bytes each -> ok
+    //   mode 3/4: VTCM  write / read bandwidth (HVX)
+    //   mode 5/6: DDR   write / read bandwidth (HVX)
+    // us = elapsed microseconds, a/b = mode-specific extras, ok = 1 on success.
+    long vtcm_probe(in long mode, in long size_bytes, in long iters,
+                    rout long us, rout long ok, rout long a, rout long b);
+
+    // Morphological erode / dilate on an 8-bit single-channel image (Lab 4
+    // Task 10.9-10.13). Erosion takes the neighbourhood minimum, dilation the
+    // maximum, over a KxK window with K in {3,5,7}.
+    //   op   0 = erode, 1 = dilate
+    //   impl 0 = the student implementation, 1 = Qualcomm's QHL HVX library
+    // W must be a multiple of 128: a QHL alignment constraint, not ours.
+    long morph_u8(in  sequence<octet> input,
+                  rout sequence<octet> result,
+                  in long W, in long H, in long K, in long op, in long impl,
+                  rout long dsp_us);
+
+    // Blocked staging of a large buffer through VTCM (Lab 4 Task 11.6-11.12).
+    // The buffer is generated on the DSP rather than marshalled across FastRPC,
+    // so transport does not swamp what is meant to be a memory measurement.
+    // P is the number of passes over each block, i.e. the arithmetic intensity.
+    //   impl 0 = calc_ddr, 1 = calc_staged_naive (memcpy), 2 = calc_staged
+    // copy_us and compute_us split dsp_us; checksum must not change with impl.
+    long stage_calc(in long mb, in long P, in long impl,
+                    rout long dsp_us, rout long copy_us, rout long compute_us,
+                    rout long checksum);
+
+    // DSP-side power mode: 0 = BASELINE, 1 = LAB (TURBO, no sleep).
+    long set_power_mode(in long mode);
+};

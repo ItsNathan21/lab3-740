@@ -1,0 +1,574 @@
+{
+  "android_build_fingerprint": "qti/canoe/canoe:16/BQ2A.250831.001-BP2A.250605.031.A3/eng.lnxbui:userdebug/test-keys",
+  "artifact_schema_version": 2,
+  "boundary": "HDK_12V_supply_input",
+  "calibration_board_serial": "9d261d4e",
+  "calibration_control_config": {
+    "cpu": "scaling_min=scaling_max at target OPP, cpuidle deployment-normal, governor walt",
+    "gpu": "min_pwrlevel=max_pwrlevel at target slot; ifpc/acd/pwrscale unchanged",
+    "supply": "12 V, CV; record the channel actually used"
+  },
+  "calibration_dataset_hash": "3ae6035cd0927c804023e072011ebda98a8aa83e16c35025bfa7b326e1cabc92",
+  "calibration_temperature_range": {
+    "by_sensor": {
+      "cpu-0-5-0": {
+        "max_c": 103.1,
+        "min_c": 29.8
+      },
+      "cpu-1-0-0": {
+        "max_c": 93.4,
+        "min_c": 33.3
+      },
+      "ddr": {
+        "max_c": 73.2,
+        "min_c": 30.3
+      },
+      "gpuss-0": {
+        "max_c": 68.5,
+        "min_c": 29.6
+      },
+      "nsphmx-0": {
+        "max_c": 68.2,
+        "min_c": 28.3
+      },
+      "nsphmx-1": {
+        "max_c": 69.4,
+        "min_c": 28.7
+      },
+      "nsphmx-2": {
+        "max_c": 71.7,
+        "min_c": 29.0
+      },
+      "nsphmx-3": {
+        "max_c": 74.0,
+        "min_c": 29.0
+      },
+      "nsphvx-0": {
+        "max_c": 67.8,
+        "min_c": 28.7
+      },
+      "nsphvx-1": {
+        "max_c": 66.7,
+        "min_c": 28.7
+      },
+      "nsphvx-2": {
+        "max_c": 66.3,
+        "min_c": 29.0
+      },
+      "nsphvx-3": {
+        "max_c": 66.3,
+        "min_c": 29.0
+      }
+    },
+    "dropped_dead_sensors": [
+      "socd"
+    ],
+    "source": "observed_raw_telemetry"
+  },
+  "cpu_idle_basis": {
+    "semantics": "max_zero_absolute_eas_util_minus_median_idle_anchor",
+    "x_gold": 0.0005910627899771714,
+    "x_prime": 0.05363669618726352
+  },
+  "eas_table": {
+    "cpu0": [
+      [
+        384000,
+        0.009447
+      ],
+      [
+        537600,
+        0.013225
+      ],
+      [
+        691200,
+        0.017004
+      ],
+      [
+        787200,
+        0.019996
+      ],
+      [
+        883200,
+        0.023515
+      ],
+      [
+        998400,
+        0.027833
+      ],
+      [
+        1113600,
+        0.032955
+      ],
+      [
+        1228800,
+        0.037986
+      ],
+      [
+        1324800,
+        0.042741
+      ],
+      [
+        1440000,
+        0.048441
+      ],
+      [
+        1555200,
+        0.055243
+      ],
+      [
+        1670400,
+        0.060938
+      ],
+      [
+        1785600,
+        0.068638
+      ],
+      [
+        1900800,
+        0.076886
+      ],
+      [
+        1996800,
+        0.082814
+      ],
+      [
+        2112000,
+        0.090886
+      ],
+      [
+        2227200,
+        0.100576
+      ],
+      [
+        2361600,
+        0.111784
+      ],
+      [
+        2496000,
+        0.122304
+      ],
+      [
+        2611200,
+        0.132373
+      ],
+      [
+        2745600,
+        0.145512
+      ],
+      [
+        2899200,
+        0.165699
+      ],
+      [
+        3033600,
+        0.19415
+      ],
+      [
+        3187200,
+        0.216403
+      ],
+      [
+        3302400,
+        0.237476
+      ],
+      [
+        3398400,
+        0.256043
+      ],
+      [
+        3513600,
+        0.279564
+      ],
+      [
+        3628800,
+        0.304476
+      ]
+    ],
+    "cpu6": [
+      [
+        768000,
+        0.030672
+      ],
+      [
+        883200,
+        0.036933
+      ],
+      [
+        1017600,
+        0.043852
+      ],
+      [
+        1132800,
+        0.051027
+      ],
+      [
+        1267200,
+        0.05876
+      ],
+      [
+        1382400,
+        0.066899
+      ],
+      [
+        1497600,
+        0.075568
+      ],
+      [
+        1632000,
+        0.086956
+      ],
+      [
+        1747200,
+        0.09561
+      ],
+      [
+        1862400,
+        0.104632
+      ],
+      [
+        1977600,
+        0.11699
+      ],
+      [
+        2112000,
+        0.129761
+      ],
+      [
+        2227200,
+        0.143766
+      ],
+      [
+        2438400,
+        0.169127
+      ],
+      [
+        2668800,
+        0.198404
+      ],
+      [
+        2880000,
+        0.228953
+      ],
+      [
+        3129600,
+        0.271148
+      ],
+      [
+        3398400,
+        0.322992
+      ],
+      [
+        3648000,
+        0.378784
+      ],
+      [
+        3763200,
+        0.409758
+      ],
+      [
+        3859200,
+        0.432131
+      ],
+      [
+        3974400,
+        0.465872
+      ],
+      [
+        4070400,
+        0.494553
+      ],
+      [
+        4185600,
+        0.531403
+      ],
+      [
+        4262400,
+        0.564938
+      ],
+      [
+        4339200,
+        0.599851
+      ],
+      [
+        4396800,
+        0.628242
+      ],
+      [
+        4512000,
+        0.682225
+      ],
+      [
+        4608000,
+        0.730449
+      ]
+    ]
+  },
+  "eas_table_hash": "3fe00ed5c3354ed2bf95d6acf10af121464d64f406112ad326fd08baaa77d155",
+  "feature_order": [
+    "activity_fraction",
+    "xf_gold_cluster",
+    "xf_gold_percore",
+    "xf_prime_cluster",
+    "xf_prime_percore",
+    "gpu_g0",
+    "gpu_g1",
+    "gpu_g2"
+  ],
+  "fit_input_hash": "9c4cc5532862c848ebbf78f84dfe92645e40e423eaef9df9c385c7a584b52517",
+  "gpu_ramp": {
+    "knots_hz": [
+      222000000.0,
+      461000000.0,
+      826000000.0
+    ],
+    "units": "Hz"
+  },
+  "hexagon_runtime_provenance": {
+    "declared": false,
+    "reason": "no Hexagon window is calibrated in this profile"
+  },
+  "hexagon_subsystem": {
+    "coefficient_scope": "not_applicable",
+    "concurrent_npu_dsp_supported": false,
+    "concurrent_path_terms_summable": false,
+    "dsp_calibrated": false,
+    "dsp_uncalibrated_reason": "unsigned PD refuses the HAP lab power vote 0x80000414 (discovery 64)",
+    "feature_semantics": "not_applicable",
+    "frequency_scaled": false,
+    "hardware_domain": "Hexagon_cDSP",
+    "hardware_serialized": true,
+    "npu_calibrated": false,
+    "npu_uncalibrated_reason": "no capturable stationary window without active cooling (discovery 73)",
+    "path_term_semantics": "no_hexagon_term_fitted",
+    "paths": [],
+    "physical_shared_path_decomposition": false,
+    "uncalibrated_paths": [
+      "QNN_HTP_v79",
+      "FastRPC_user_PD"
+    ]
+  },
+  "holdout_window_ids": [
+    "gold6_mid",
+    "gpu_826"
+  ],
+  "idle_anchor_power_w": [
+    0.08080000000000001,
+    0.08120000000000001,
+    0.08360000000000001
+  ],
+  "kernel_release": "6.12.30-android16-5-maybe-dirty-4k",
+  "known_unmodeled_terms": [
+    "NPU/DSP internal frequency and utilization",
+    "NPU/DSP workload-class variation within a path",
+    "PMIC-efficiency",
+    "cross-board transfer",
+    "memory/DDR/LLCC",
+    "precision",
+    "thermal-leakage"
+  ],
+  "minimum_validated_interval_s": 30.0,
+  "model_equation_version": "teaching-power-v2",
+  "model_profile": "cpu_gpu_freq",
+  "model_version": "sm8850-teaching-v2",
+  "named_coefficients": {
+    "floor_F": {
+      "units": "W_per_activity_fraction",
+      "value": 0.0
+    },
+    "gold_cluster": {
+      "units": "W_per_GHz",
+      "value": 0.6407278879199383
+    },
+    "gold_percore": {
+      "units": "W_per_(core*GHz)",
+      "value": 0.32088124528966094
+    },
+    "gpu_d0": {
+      "units": "W_per_(busy*phi)",
+      "value": 1.6869318072258745
+    },
+    "gpu_d1": {
+      "units": "W_per_(busy*phi)",
+      "value": 0.8053321832805759
+    },
+    "gpu_d2": {
+      "units": "W_per_(busy*phi)",
+      "value": 3.9581166050669707
+    },
+    "prime_cluster": {
+      "units": "W_per_GHz",
+      "value": 0.0
+    },
+    "prime_percore": {
+      "units": "W_per_(core*GHz)",
+      "value": 1.2174625334741829
+    }
+  },
+  "quality": "modeled_ballpark",
+  "quiescent_power_w": 0.08120000000000001,
+  "scope": "whole_system",
+  "source_session_hash_algorithm": "sha256-project-canonical-json-v1",
+  "source_session_hashes": {
+    "calibration_session_sha256": "3ae6035cd0927c804023e072011ebda98a8aa83e16c35025bfa7b326e1cabc92"
+  },
+  "supported_cpu_gpu_opps": {
+    "gold_khz": [
+      384000,
+      537600,
+      691200,
+      787200,
+      883200,
+      998400,
+      1113600,
+      1228800,
+      1324800,
+      1440000,
+      1555200,
+      1670400,
+      1785600,
+      1900800,
+      1996800,
+      2112000,
+      2227200,
+      2361600,
+      2496000,
+      2611200,
+      2745600,
+      2899200,
+      3033600,
+      3187200,
+      3302400,
+      3398400,
+      3513600,
+      3628800
+    ],
+    "gpu_mhz": [
+      222,
+      461,
+      726,
+      826,
+      1000
+    ],
+    "prime_khz": [
+      768000,
+      883200,
+      1017600,
+      1132800,
+      1267200,
+      1382400,
+      1497600,
+      1632000,
+      1747200,
+      1862400,
+      1977600,
+      2112000,
+      2227200,
+      2438400,
+      2668800,
+      2880000,
+      3129600,
+      3398400,
+      3648000,
+      3763200,
+      3859200,
+      3974400,
+      4070400,
+      4185600,
+      4262400,
+      4339200,
+      4396800
+    ]
+  },
+  "supported_dsp_power_modes": [],
+  "supported_perf_modes": [],
+  "telemetry_aggregation_version": "agg-v2",
+  "train_window_ids": [
+    "floor",
+    "gold6_lo",
+    "gold6_hi",
+    "gold1_lo",
+    "gold1_hi",
+    "gold6_a",
+    "gold6_b",
+    "gold6_c",
+    "prime2_lo",
+    "prime2_hi",
+    "gpu_222",
+    "gpu_461",
+    "gpu_726"
+  ],
+  "validation_observed": {
+    "baselines": {
+      "constant_total": {
+        "holdout_mae_w": 2.4067923076923083,
+        "value_w": 3.808307692307692
+      },
+      "cpu_eas_only": {
+        "F_w": 1.5159185885612214,
+        "g": 8.133280487986681,
+        "holdout_mae_w": 0.2854082510970981
+      },
+      "gpu_active_constant": {
+        "c_w": 3.4113333333333333,
+        "holdout_mae_w": 3.5894666666666675
+      },
+      "idle_plus_active": {
+        "c_w": 3.7271076923076927,
+        "holdout_mae_w": 2.406792307692308
+      }
+    },
+    "design_hash": "46bd80d34b3e188ace88d0b43ea138d8120386449d0712631ee7abc91e06880f",
+    "engine_metrics": {
+      "cpu": {
+        "holdout_mae_w": 0.27000050624164373,
+        "holdout_window_ids": [
+          "gold6_mid"
+        ],
+        "max_total_relative_error": 0.0504843697396589,
+        "n_holdout": 1
+      },
+      "gpu": {
+        "holdout_mae_w": 0.2591622994321101,
+        "holdout_window_ids": [
+          "gpu_826"
+        ],
+        "max_total_relative_error": 0.03659450712116776,
+        "n_holdout": 1
+      }
+    },
+    "gate": {
+      "checks": {
+        "beats_constant": true,
+        "beats_idle_plus_active": true,
+        "cpu_beats_eas_only": true,
+        "cpu_gpu_mae_no_material_regression": true,
+        "cpu_gpu_max_rel_no_material_regression": true,
+        "gpu_beats_active_constant": true,
+        "has_cpu_holdout": true,
+        "has_gpu_holdout": true,
+        "holdout_ids_match": true
+      },
+      "passed": true
+    },
+    "idle_subtracted_mae_w": 0.2645814028368765,
+    "is_prediction_interval": false,
+    "legacy_cpu_gpu_regression": {
+      "holdout_mae_w": 0.2645814028368765,
+      "max_total_relative_error": 0.0504843697396589,
+      "maximum_holdout_mae_w": 0.402,
+      "maximum_holdout_relative_error": 0.083,
+      "v1_artifact_sha256": "12a0928f5609c31986cc264076ac9852d94867151218a869a0a7983c997a0db1",
+      "v1_dataset_sha256": "041b4710acc7bc10e412465adf9866387c426188d76a81c80de5082aee51c0dc",
+      "v1_reference_mae_w": 0.3016397082237301,
+      "v1_reference_max_total_relative_error": 0.06311514417987642
+    },
+    "max_total_relative_error": 0.0504843697396589,
+    "n_holdout": 2,
+    "note": "Descriptive calibration result; no coverage guarantee.",
+    "source_session_hash_algorithm": "sha256-project-canonical-json-v1",
+    "source_session_hashes": {
+      "calibration_session_sha256": "3ae6035cd0927c804023e072011ebda98a8aa83e16c35025bfa7b326e1cabc92"
+    }
+  }
+}
