@@ -1,0 +1,16 @@
+{
+  "gold": {
+    "scaling_min_freq": "787200",
+    "scaling_max_freq": "3628800",
+    "scaling_governor": "walt"
+  },
+  "prime": {
+    "scaling_min_freq": "883200",
+    "scaling_max_freq": "4608000",
+    "scaling_governor": "walt"
+  },
+  "gpu": {
+    "min_pwrlevel": "17",
+    "max_pwrlevel": "0"
+  }
+}

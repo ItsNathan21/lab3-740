@@ -1,0 +1,516 @@
+
+=== Frequency: 768000 ===
+
+--- matmul ---
+    1  matmul.cpu                      363536.5 us/iter x10       5.9 GFLOP/s     0.0 GB/s  fp=2.7187e+04  IPC=3.14  [clock 17% of max]
+    2  matmul.cpu                      363937.6 us/iter x10       5.9 GFLOP/s     0.0 GB/s  fp=2.7187e+04  IPC=3.13  [clock 17% of max]
+    3  matmul.cpu                      365312.1 us/iter x10       5.9 GFLOP/s     0.0 GB/s  fp=2.7187e+04  IPC=3.12  [clock 17% of max]
+
+  n=3  GFLOP/s: mean 5.9  range 5.9-5.9  CoV 0.3%
+
+  counters, mean of 3 run(s):
+  cpu-cycles                  2,821,737,368
+  instructions                8,833,440,414
+  stalled-cycles-frontend     1,667,978,363
+  stalled-cycles-backend         12,368,590
+  raw-stall-slot             15,121,219,963
+  raw-stall-slot-backend        101,178,687
+  raw-stall-slot-frontend    15,022,386,999
+  raw-stall-backend-mem           1,893,276
+
+  ipc                                  3.131   range 3.122-3.137
+  cpi                                  0.319   range 0.319-0.320
+  frontend_stall_pct                  59.112   range 59.031-59.233
+  backend_stall_pct                    0.438   range 0.427-0.452
+  mem_stall_pct                        0.067   range 0.067-0.068
+  slot_backend_pct                     0.669   range 0.660-0.675
+  scaling_cur_freq_ghz                 0.768   range 0.768-0.768
+  scaling_cur_freq_samples           173.667   range 173.000-175.000
+  effective_ghz                        0.767   range 0.766-0.768
+  clock_of_max_pct                    17.451   range 17.416-17.470
+
+--- convolution ---
+    1  convolution.cpu                  48299.1 us/iter x10       1.6 GFLOP/s     0.1 GB/s  fp=5.2320e+02  IPC=4.74  [clock 18% of max]
+    2  convolution.cpu                  48339.9 us/iter x10       1.6 GFLOP/s     0.1 GB/s  fp=5.2320e+02  IPC=4.74  [clock 18% of max]
+    3  convolution.cpu                  48352.9 us/iter x10       1.6 GFLOP/s     0.1 GB/s  fp=5.2320e+02  IPC=4.74  [clock 17% of max]
+
+  n=3  GFLOP/s: mean 1.6  range 1.6-1.6  CoV 0.1%
+
+  counters, mean of 3 run(s):
+  cpu-cycles                    392,652,832
+  instructions                1,861,480,605
+  stalled-cycles-frontend       113,672,467
+  stalled-cycles-backend          6,068,420
+  raw-stall-slot              1,339,448,785
+  raw-stall-slot-backend         43,842,500
+  raw-stall-slot-frontend     1,296,954,315
+  raw-stall-backend-mem             714,879
+
+  ipc                                  4.741   range 4.737-4.744
+  cpi                                  0.211   range 0.211-0.211
+  frontend_stall_pct                  28.950   range 28.934-28.970
+  backend_stall_pct                    1.545   range 1.490-1.583
+  mem_stall_pct                        0.182   range 0.176-0.188
+  slot_backend_pct                     3.273   range 3.223-3.339
+  scaling_cur_freq_ghz                 0.768   range 0.768-0.768
+  scaling_cur_freq_samples            52.000   range 50.000-55.000
+  effective_ghz                        0.773   range 0.769-0.775
+  clock_of_max_pct                    17.587   range 17.496-17.637
+
+--- saxpy ---
+    1  saxpy.cpu                         6415.0 us/iter x100    31.4 GB/s  fp=2.7211e+05  IPC=5.31  [clock 18% of max]
+    2  saxpy.cpu                         6487.5 us/iter x100    31.0 GB/s  fp=2.7211e+05  IPC=5.25  [clock 18% of max]
+    3  saxpy.cpu                         6532.6 us/iter x100    30.8 GB/s  fp=2.7211e+05  IPC=5.22  [clock 17% of max]
+
+  n=3  GB/s: mean 31.1  range 30.8-31.4  CoV 0.9%
+
+  counters, mean of 3 run(s):
+  cpu-cycles                    681,912,106
+  instructions                3,587,355,430
+  stalled-cycles-frontend        45,009,119
+  stalled-cycles-backend        130,819,889
+  raw-stall-slot              1,587,233,740
+  raw-stall-slot-backend      1,169,198,052
+  raw-stall-slot-frontend       425,848,353
+  raw-stall-backend-mem           1,539,348
+
+  ipc                                  5.261   range 5.222-5.307
+  cpi                                  0.190   range 0.188-0.192
+  frontend_stall_pct                   6.600   range 6.570-6.630
+  backend_stall_pct                   19.181   range 18.531-19.769
+  mem_stall_pct                        0.225   range 0.159-0.277
+  slot_backend_pct                    73.648   range 72.978-74.371
+  scaling_cur_freq_ghz                 0.768   range 0.768-0.768
+  scaling_cur_freq_samples            65.667   range 65.000-67.000
+  effective_ghz                        0.769   range 0.766-0.770
+  clock_of_max_pct                    17.485   range 17.428-17.515
+
+=== Frequency: 1497600 ===
+
+--- matmul ---
+    1  matmul.cpu                      186958.1 us/iter x10      11.5 GFLOP/s     0.1 GB/s  fp=2.7187e+04  IPC=3.12  [clock 34% of max]
+    2  matmul.cpu                      187560.7 us/iter x10      11.4 GFLOP/s     0.1 GB/s  fp=2.7187e+04  IPC=3.11  [clock 34% of max]
+    3  matmul.cpu                      186689.8 us/iter x10      11.5 GFLOP/s     0.1 GB/s  fp=2.7187e+04  IPC=3.13  [clock 34% of max]
+
+  n=3  GFLOP/s: mean 11.5  range 11.4-11.5  CoV 0.2%
+
+  counters, mean of 3 run(s):
+  cpu-cycles                  2,830,437,273
+  instructions                8,827,913,058
+  stalled-cycles-frontend     1,678,143,945
+  stalled-cycles-backend         11,901,602
+  raw-stall-slot             15,206,649,819
+  raw-stall-slot-backend         96,933,908
+  raw-stall-slot-frontend    15,112,340,175
+  raw-stall-backend-mem           1,832,106
+
+  ipc                                  3.119   range 3.110-3.125
+  cpi                                  0.321   range 0.320-0.322
+  frontend_stall_pct                  59.289   range 59.202-59.389
+  backend_stall_pct                    0.420   range 0.403-0.433
+  mem_stall_pct                        0.065   range 0.059-0.069
+  slot_backend_pct                     0.637   range 0.605-0.657
+  scaling_cur_freq_ghz                 1.498   range 1.498-1.498
+  scaling_cur_freq_samples           103.667   range 101.000-105.000
+  effective_ghz                        1.495   range 1.495-1.497
+  clock_of_max_pct                    34.013   range 33.995-34.039
+
+--- convolution ---
+    1  convolution.cpu                  24696.4 us/iter x10       3.1 GFLOP/s     0.2 GB/s  fp=5.2320e+02  IPC=4.77  [clock 34% of max]
+    2  convolution.cpu                  24711.9 us/iter x10       3.1 GFLOP/s     0.2 GB/s  fp=5.2320e+02  IPC=4.75  [clock 34% of max]
+    3  convolution.cpu                  24702.4 us/iter x10       3.1 GFLOP/s     0.2 GB/s  fp=5.2320e+02  IPC=4.73  [clock 33% of max]
+
+  n=3  GFLOP/s: mean 3.1  range 3.1-3.1  CoV 0.0%
+
+  counters, mean of 3 run(s):
+  cpu-cycles                    391,777,044
+  instructions                1,860,682,329
+  stalled-cycles-frontend       113,347,405
+  stalled-cycles-backend          5,703,846
+  raw-stall-slot              1,336,294,012
+  raw-stall-slot-backend         42,973,587
+  raw-stall-slot-frontend     1,294,736,805
+  raw-stall-backend-mem             680,081
+
+  ipc                                  4.749   range 4.734-4.765
+  cpi                                  0.211   range 0.210-0.211
+  frontend_stall_pct                  28.931   range 28.857-29.062
+  backend_stall_pct                    1.456   range 1.290-1.550
+  mem_stall_pct                        0.173   range 0.128-0.232
+  slot_backend_pct                     3.214   range 2.868-3.533
+  scaling_cur_freq_ghz                 1.498   range 1.498-1.498
+  scaling_cur_freq_samples            44.667   range 44.000-46.000
+  effective_ghz                        1.498   range 1.467-1.514
+  clock_of_max_pct                    34.067   range 33.358-34.437
+
+--- saxpy ---
+    1  saxpy.cpu                         4420.4 us/iter x100    45.5 GB/s  fp=2.7211e+05  IPC=4.25  [clock 34% of max]
+    2  saxpy.cpu                         4478.5 us/iter x100    45.0 GB/s  fp=2.7211e+05  IPC=4.19  [clock 34% of max]
+    3  saxpy.cpu                         4447.6 us/iter x100    45.3 GB/s  fp=2.7211e+05  IPC=4.21  [clock 34% of max]
+
+  n=3  GB/s: mean 45.3  range 45.0-45.5  CoV 0.7%
+
+  counters, mean of 3 run(s):
+  cpu-cycles                    851,024,427
+  instructions                3,586,147,332
+  stalled-cycles-frontend        45,731,353
+  stalled-cycles-backend        299,462,680
+  raw-stall-slot              3,110,142,544
+  raw-stall-slot-backend      2,686,827,761
+  raw-stall-slot-frontend       430,775,317
+  raw-stall-backend-mem          30,764,055
+
+  ipc                                  4.214   range 4.187-4.245
+  cpi                                  0.237   range 0.236-0.239
+  frontend_stall_pct                   5.373   range 5.294-5.441
+  backend_stall_pct                   35.187   range 34.825-35.555
+  mem_stall_pct                        3.614   range 3.523-3.778
+  slot_backend_pct                    86.389   range 86.252-86.501
+  scaling_cur_freq_ghz                 1.498   range 1.498-1.498
+  scaling_cur_freq_samples            55.333   range 54.000-56.000
+  effective_ghz                        1.491   range 1.485-1.499
+  clock_of_max_pct                    33.919   range 33.782-34.093
+
+=== Frequency: 2112000 ===
+
+--- matmul ---
+    1  matmul.cpu                      131890.0 us/iter x10      16.3 GFLOP/s     0.1 GB/s  fp=2.7187e+04  IPC=3.14  [clock 48% of max]
+    2  matmul.cpu                      132148.7 us/iter x10      16.3 GFLOP/s     0.1 GB/s  fp=2.7187e+04  IPC=3.13  [clock 48% of max]
+    3  matmul.cpu                      132718.0 us/iter x10      16.2 GFLOP/s     0.1 GB/s  fp=2.7187e+04  IPC=3.11  [clock 48% of max]
+
+  n=3  GFLOP/s: mean 16.2  range 16.2-16.3  CoV 0.3%
+
+  counters, mean of 3 run(s):
+  cpu-cycles                  2,822,991,837
+  instructions                8,825,545,233
+  stalled-cycles-frontend     1,671,537,938
+  stalled-cycles-backend         11,640,511
+  raw-stall-slot             15,144,397,162
+  raw-stall-slot-backend         94,842,582
+  raw-stall-slot-frontend    15,052,013,029
+  raw-stall-backend-mem           1,869,007
+
+  ipc                                  3.126   range 3.114-3.137
+  cpi                                  0.320   range 0.319-0.321
+  frontend_stall_pct                  59.211   range 59.103-59.361
+  backend_stall_pct                    0.412   range 0.382-0.429
+  mem_stall_pct                        0.066   range 0.059-0.071
+  slot_backend_pct                     0.626   range 0.594-0.643
+  scaling_cur_freq_ghz                 2.112   range 2.112-2.112
+  scaling_cur_freq_samples            81.667   range 81.000-83.000
+  effective_ghz                        2.111   range 2.109-2.112
+  clock_of_max_pct                    48.003   range 47.967-48.040
+
+--- convolution ---
+    1  convolution.cpu                  17496.3 us/iter x10       4.3 GFLOP/s     0.2 GB/s  fp=5.2320e+02  IPC=4.76  [clock 48% of max]
+    2  convolution.cpu                  17513.5 us/iter x10       4.3 GFLOP/s     0.2 GB/s  fp=5.2320e+02  IPC=4.71  [clock 46% of max]
+    3  convolution.cpu                  17491.2 us/iter x10       4.3 GFLOP/s     0.2 GB/s  fp=5.2320e+02  IPC=4.74  [clock 48% of max]
+
+  n=3  GFLOP/s: mean 4.3  range 4.3-4.3  CoV 0.1%
+
+  counters, mean of 3 run(s):
+  cpu-cycles                    393,015,473
+  instructions                1,860,507,794
+  stalled-cycles-frontend       114,043,211
+  stalled-cycles-backend          6,288,729
+  raw-stall-slot              1,346,081,123
+  raw-stall-slot-backend         47,078,989
+  raw-stall-slot-frontend     1,300,611,730
+  raw-stall-backend-mem             824,460
+
+  ipc                                  4.734   range 4.706-4.757
+  cpi                                  0.211   range 0.210-0.212
+  frontend_stall_pct                  29.017   range 28.850-29.322
+  backend_stall_pct                    1.600   range 1.436-1.689
+  mem_stall_pct                        0.210   range 0.156-0.252
+  slot_backend_pct                     3.494   range 3.158-3.878
+  scaling_cur_freq_ghz                 2.112   range 2.112-2.112
+  scaling_cur_freq_samples            41.000   range 39.000-43.000
+  effective_ghz                        2.092   range 2.025-2.126
+  clock_of_max_pct                    47.591   range 46.047-48.362
+
+--- saxpy ---
+    1  saxpy.cpu                         3880.9 us/iter x100    51.9 GB/s  fp=2.7211e+05  IPC=3.57  [clock 48% of max]
+    2  saxpy.cpu                         3789.8 us/iter x100    53.1 GB/s  fp=2.7211e+05  IPC=3.62  [clock 48% of max]
+    3  saxpy.cpu                         3774.6 us/iter x100    53.3 GB/s  fp=2.7211e+05  IPC=3.64  [clock 47% of max]
+
+  n=3  GB/s: mean 52.8  range 51.9-53.3  CoV 1.5%
+
+  counters, mean of 3 run(s):
+  cpu-cycles                    992,737,558
+  instructions                3,585,431,920
+  stalled-cycles-frontend        46,724,711
+  stalled-cycles-backend        440,374,824
+  raw-stall-slot              4,386,923,936
+  raw-stall-slot-backend      3,955,147,930
+  raw-stall-slot-frontend       440,471,060
+  raw-stall-backend-mem          65,434,918
+
+  ipc                                  3.612   range 3.571-3.640
+  cpi                                  0.277   range 0.275-0.280
+  frontend_stall_pct                   4.708   range 4.524-4.800
+  backend_stall_pct                   44.355   range 43.864-45.121
+  mem_stall_pct                        6.592   range 6.462-6.766
+  slot_backend_pct                    90.152   range 89.891-90.631
+  scaling_cur_freq_ghz                 2.112   range 2.112-2.112
+  scaling_cur_freq_samples            52.333   range 52.000-53.000
+  effective_ghz                        2.094   range 2.075-2.108
+  clock_of_max_pct                    47.629   range 47.191-47.940
+
+=== Frequency: 3129600 ===
+
+--- matmul ---
+    1  matmul.cpu                       88790.0 us/iter x10      24.2 GFLOP/s     0.1 GB/s  fp=2.7187e+04  IPC=3.13  [clock 71% of max]
+    2  matmul.cpu                       88933.6 us/iter x10      24.1 GFLOP/s     0.1 GB/s  fp=2.7187e+04  IPC=3.14  [clock 71% of max]
+    3  matmul.cpu                       89134.4 us/iter x10      24.1 GFLOP/s     0.1 GB/s  fp=2.7187e+04  IPC=3.12  [clock 71% of max]
+
+  n=3  GFLOP/s: mean 24.1  range 24.1-24.2  CoV 0.2%
+
+  counters, mean of 3 run(s):
+  cpu-cycles                  2,818,056,369
+  instructions                8,823,445,563
+  stalled-cycles-frontend     1,665,331,889
+  stalled-cycles-backend         13,291,010
+  raw-stall-slot             15,104,580,391
+  raw-stall-slot-backend        110,952,647
+  raw-stall-slot-frontend    14,997,506,922
+  raw-stall-backend-mem           2,200,643
+
+  ipc                                  3.131   range 3.123-3.136
+  cpi                                  0.319   range 0.319-0.320
+  frontend_stall_pct                  59.095   range 59.015-59.170
+  backend_stall_pct                    0.472   range 0.400-0.507
+  mem_stall_pct                        0.078   range 0.065-0.086
+  slot_backend_pct                     0.734   range 0.616-0.793
+  scaling_cur_freq_ghz                 3.130   range 3.130-3.130
+  scaling_cur_freq_samples            67.667   range 67.000-68.000
+  effective_ghz                        3.116   range 3.110-3.127
+  clock_of_max_pct                    70.867   range 70.729-71.119
+
+--- convolution ---
+    1  convolution.cpu                  11809.3 us/iter x10       6.4 GFLOP/s     0.4 GB/s  fp=5.2320e+02  IPC=4.72  [clock 68% of max]
+    2  convolution.cpu                  11805.9 us/iter x10       6.4 GFLOP/s     0.4 GB/s  fp=5.2320e+02  IPC=4.73  [clock 70% of max]
+    3  convolution.cpu                  11804.0 us/iter x10       6.4 GFLOP/s     0.4 GB/s  fp=5.2320e+02  IPC=4.75  [clock 71% of max]
+
+  n=3  GFLOP/s: mean 6.4  range 6.4-6.4  CoV 0.0%
+
+  counters, mean of 3 run(s):
+  cpu-cycles                    393,197,187
+  instructions                1,860,313,738
+  stalled-cycles-frontend       114,160,807
+  stalled-cycles-backend          6,395,227
+  raw-stall-slot              1,347,607,430
+  raw-stall-slot-backend         47,482,781
+  raw-stall-slot-frontend     1,301,774,079
+  raw-stall-backend-mem             824,173
+
+  ipc                                  4.731   range 4.718-4.748
+  cpi                                  0.211   range 0.211-0.212
+  frontend_stall_pct                  29.034   range 28.944-29.168
+  backend_stall_pct                    1.626   range 1.425-1.768
+  mem_stall_pct                        0.210   range 0.176-0.238
+  slot_backend_pct                     3.522   range 3.201-3.764
+  scaling_cur_freq_ghz                 3.130   range 3.130-3.130
+  scaling_cur_freq_samples            39.667   range 39.000-40.000
+  effective_ghz                        3.068   range 3.005-3.126
+  clock_of_max_pct                    69.768   range 68.352-71.095
+
+--- saxpy ---
+    1  saxpy.cpu                         3313.4 us/iter x100    60.8 GB/s  fp=2.7211e+05  IPC=2.92  [clock 70% of max]
+    2  saxpy.cpu                         3344.7 us/iter x100    60.2 GB/s  fp=2.7211e+05  IPC=2.89  [clock 70% of max]
+    3  saxpy.cpu                         3341.6 us/iter x100    60.2 GB/s  fp=2.7211e+05  IPC=2.90  [clock 71% of max]
+
+  n=3  GB/s: mean 60.4  range 60.2-60.8  CoV 0.5%
+
+  counters, mean of 3 run(s):
+  cpu-cycles                  1,236,252,424
+  instructions                3,585,271,948
+  stalled-cycles-frontend        48,354,142
+  stalled-cycles-backend        682,367,253
+  raw-stall-slot              6,576,303,652
+  raw-stall-slot-backend      6,131,541,954
+  raw-stall-slot-frontend       457,666,458
+  raw-stall-backend-mem         136,487,219
+
+  ipc                                  2.900   range 2.886-2.916
+  cpi                                  0.345   range 0.343-0.346
+  frontend_stall_pct                   3.911   range 3.851-3.960
+  backend_stall_pct                   55.196   range 54.959-55.342
+  mem_stall_pct                       11.039   range 10.729-11.382
+  slot_backend_pct                    93.237   range 93.174-93.352
+  scaling_cur_freq_ghz                 3.130   range 3.130-3.130
+  scaling_cur_freq_samples            47.667   range 45.000-50.000
+  effective_ghz                        3.102   range 3.086-3.127
+  clock_of_max_pct                    70.541   range 70.192-71.118
+
+=== Frequency: 3974400 ===
+
+--- matmul ---
+    1  matmul.cpu                       70451.2 us/iter x10      30.5 GFLOP/s     0.2 GB/s  fp=2.7187e+04  IPC=3.11
+    2  matmul.cpu                       70458.5 us/iter x10      30.5 GFLOP/s     0.2 GB/s  fp=2.7187e+04  IPC=3.12
+    3  matmul.cpu                       70418.9 us/iter x10      30.5 GFLOP/s     0.2 GB/s  fp=2.7187e+04  IPC=3.11
+
+  n=3  GFLOP/s: mean 30.5  range 30.5-30.5  CoV 0.0%
+
+  counters, mean of 3 run(s):
+  cpu-cycles                  2,833,458,139
+  instructions                8,822,328,385
+  stalled-cycles-frontend     1,681,311,941
+  stalled-cycles-backend         13,016,635
+  raw-stall-slot             15,244,562,459
+  raw-stall-slot-backend        107,531,267
+  raw-stall-slot-frontend    15,140,398,217
+  raw-stall-backend-mem           1,982,410
+
+  ipc                                  3.114   range 3.112-3.117
+  cpi                                  0.321   range 0.321-0.321
+  frontend_stall_pct                  59.338   range 59.316-59.360
+  backend_stall_pct                    0.459   range 0.397-0.495
+  mem_stall_pct                        0.070   range 0.052-0.082
+  slot_backend_pct                     0.705   range 0.613-0.763
+  scaling_cur_freq_ghz                 3.974   range 3.974-3.974
+  scaling_cur_freq_samples            56.667   range 56.000-58.000
+  effective_ghz                        3.950   range 3.939-3.969
+  clock_of_max_pct                    89.842   range 89.593-90.261
+
+--- convolution ---
+    1  convolution.cpu                   9294.6 us/iter x10       8.1 GFLOP/s     0.5 GB/s  fp=5.2320e+02  IPC=4.67
+    2  convolution.cpu                   9299.5 us/iter x10       8.1 GFLOP/s     0.5 GB/s  fp=5.2320e+02  IPC=4.69
+    3  convolution.cpu                   9296.7 us/iter x10       8.1 GFLOP/s     0.5 GB/s  fp=5.2320e+02  IPC=4.64
+
+  n=3  GFLOP/s: mean 8.1  range 8.1-8.1  CoV 0.0%
+
+  counters, mean of 3 run(s):
+  cpu-cycles                    398,706,495
+  instructions                1,860,138,803
+  stalled-cycles-frontend       117,721,162
+  stalled-cycles-backend          8,399,557
+  raw-stall-slot              1,398,021,322
+  raw-stall-slot-backend         66,113,993
+  raw-stall-slot-frontend     1,334,713,202
+  raw-stall-backend-mem           1,575,675
+
+  ipc                                  4.666   range 4.641-4.687
+  cpi                                  0.214   range 0.213-0.215
+  frontend_stall_pct                  29.525   range 29.299-29.830
+  backend_stall_pct                    2.106   range 2.018-2.165
+  mem_stall_pct                        0.395   range 0.324-0.431
+  slot_backend_pct                     4.727   range 4.455-4.895
+  scaling_cur_freq_ghz                 3.974   range 3.974-3.974
+  scaling_cur_freq_samples            37.333   range 37.000-38.000
+  effective_ghz                        3.777   range 3.744-3.841
+  clock_of_max_pct                    85.914   range 85.160-87.352
+
+--- saxpy ---
+    1  saxpy.cpu                         2713.3 us/iter x100    74.2 GB/s  fp=2.7211e+05  IPC=2.82
+    2  saxpy.cpu                         2662.2 us/iter x100    75.6 GB/s  fp=2.7211e+05  IPC=2.86
+    3  saxpy.cpu                         2709.2 us/iter x100    74.3 GB/s  fp=2.7211e+05  IPC=2.81
+
+  n=3  GB/s: mean 74.7  range 74.2-75.6  CoV 1.1%
+
+  counters, mean of 3 run(s):
+  cpu-cycles                  1,266,239,225
+  instructions                3,584,777,263
+  stalled-cycles-frontend        49,356,749
+  stalled-cycles-backend        711,489,491
+  raw-stall-slot              6,847,799,743
+  raw-stall-slot-backend      6,393,967,186
+  raw-stall-slot-frontend       467,800,429
+  raw-stall-backend-mem         134,194,534
+
+  ipc                                  2.831   range 2.814-2.857
+  cpi                                  0.353   range 0.350-0.355
+  frontend_stall_pct                   3.898   range 3.719-4.044
+  backend_stall_pct                   56.187   range 55.665-56.488
+  mem_stall_pct                       10.598   range 10.104-10.990
+  slot_backend_pct                    93.371   range 93.097-93.667
+  scaling_cur_freq_ghz                 3.974   range 3.974-3.974
+  scaling_cur_freq_samples            44.333   range 43.000-46.000
+  effective_ghz                        3.923   range 3.870-3.957
+  clock_of_max_pct                    89.231   range 88.027-90.004
+
+=== Frequency: 4396800 ===
+
+--- matmul ---
+    1  matmul.cpu                       63147.1 us/iter x10      34.0 GFLOP/s     0.2 GB/s  fp=2.7187e+04  IPC=3.14
+    2  matmul.cpu                       63260.1 us/iter x10      33.9 GFLOP/s     0.2 GB/s  fp=2.7187e+04  IPC=3.13
+    3  matmul.cpu                       63492.8 us/iter x10      33.8 GFLOP/s     0.2 GB/s  fp=2.7187e+04  IPC=3.12
+
+  n=3  GFLOP/s: mean 33.9  range 33.8-34.0  CoV 0.3%
+
+  counters, mean of 3 run(s):
+  cpu-cycles                  2,818,340,181
+  instructions                8,822,544,277
+  stalled-cycles-frontend     1,665,343,004
+  stalled-cycles-backend         13,757,293
+  raw-stall-slot             15,109,970,880
+  raw-stall-slot-backend        116,072,360
+  raw-stall-slot-frontend    14,998,072,417
+  raw-stall-backend-mem           2,198,064
+
+  ipc                                  3.130   range 3.121-3.142
+  cpi                                  0.319   range 0.318-0.320
+  frontend_stall_pct                  59.089   range 59.007-59.203
+  backend_stall_pct                    0.488   range 0.430-0.542
+  mem_stall_pct                        0.078   range 0.070-0.085
+  slot_backend_pct                     0.768   range 0.674-0.854
+  scaling_cur_freq_ghz                 4.397   range 4.397-4.397
+  scaling_cur_freq_samples            55.333   range 53.000-58.000
+  effective_ghz                        4.363   range 4.345-4.388
+  clock_of_max_pct                    99.228   range 98.830-99.811
+
+--- convolution ---
+    1  convolution.cpu                   8402.1 us/iter x10       9.0 GFLOP/s     0.5 GB/s  fp=5.2320e+02  IPC=4.73
+    2  convolution.cpu                   8401.3 us/iter x10       9.0 GFLOP/s     0.5 GB/s  fp=5.2320e+02  IPC=4.67
+    3  convolution.cpu                   8406.9 us/iter x10       9.0 GFLOP/s     0.5 GB/s  fp=5.2320e+02  IPC=4.65
+
+  n=3  GFLOP/s: mean 9.0  range 9.0-9.0  CoV 0.0%
+
+  counters, mean of 3 run(s):
+  cpu-cycles                    397,207,220
+  instructions                1,860,189,670
+  stalled-cycles-frontend       116,995,944
+  stalled-cycles-backend          7,608,543
+  raw-stall-slot              1,387,342,747
+  raw-stall-slot-backend         61,193,181
+  raw-stall-slot-frontend     1,328,691,357
+  raw-stall-backend-mem           1,383,645
+
+  ipc                                  4.683   range 4.653-4.730
+  cpi                                  0.214   range 0.211-0.215
+  frontend_stall_pct                  29.453   range 29.088-29.798
+  backend_stall_pct                    1.914   range 1.598-2.128
+  mem_stall_pct                        0.348   range 0.252-0.412
+  slot_backend_pct                     4.402   range 3.643-4.905
+  scaling_cur_freq_ghz                 4.397   range 4.397-4.397
+  scaling_cur_freq_samples            35.000   range 32.000-37.000
+  effective_ghz                        4.155   range 4.055-4.355
+  clock_of_max_pct                    94.506   range 92.215-99.054
+
+--- saxpy ---
+    1  saxpy.cpu                         2634.9 us/iter x100    76.4 GB/s  fp=2.7211e+05  IPC=2.65
+    2  saxpy.cpu                         2672.7 us/iter x100    75.3 GB/s  fp=2.7211e+05  IPC=2.62
+    3  saxpy.cpu                         2712.1 us/iter x100    74.2 GB/s  fp=2.7211e+05  IPC=2.59
+
+  n=3  GB/s: mean 75.3  range 74.2-76.4  CoV 1.4%
+
+  counters, mean of 3 run(s):
+  cpu-cycles                  1,369,124,128
+  instructions                3,585,127,458
+  stalled-cycles-frontend        47,929,842
+  stalled-cycles-backend        815,754,327
+  raw-stall-slot              7,775,923,937
+  raw-stall-slot-backend      7,334,027,673
+  raw-stall-slot-frontend       456,279,358
+  raw-stall-backend-mem         169,551,628
+
+  ipc                                  2.619   range 2.588-2.652
+  cpi                                  0.382   range 0.377-0.386
+  frontend_stall_pct                   3.501   range 3.433-3.543
+  backend_stall_pct                   59.578   range 59.074-60.072
+  mem_stall_pct                       12.383   range 11.885-13.149
+  slot_backend_pct                    94.316   range 94.203-94.458
+  scaling_cur_freq_ghz                 4.397   range 4.397-4.397
+  scaling_cur_freq_samples            45.000   range 45.000-45.000
+  effective_ghz                        4.374   range 4.359-4.381
+  clock_of_max_pct                    99.471   range 99.129-99.643

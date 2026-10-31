@@ -1,0 +1,44 @@
+# Generated local toolchain
+.toolchain/
+.toolchain.backup-*/
+
+# Python bytecode and caches
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+
+# Virtual environments and local secrets
+.venv/
+venv/
+env/
+.env
+.env.*
+!.env.example
+
+# Python build output
+build/
+dist/
+*.egg-info/
+
+# Generated experiment output
+task_output/
+*.log
+
+# Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Operating system files
+.DS_Store
+Thumbs.db
+
+.toolchain/
+.toolchain.backup-*/
