@@ -14,7 +14,7 @@ def changeFreq(freq):
 
 
 def main(outfile):
-    with open(outfile, "wa") as of:
+    with open(outfile, "w") as of:
         for freq in FREQUENCIES:
             changeFreq(freq)
             print(f"\n=== Frequency: {freq} ===", file=of, flush=True)
