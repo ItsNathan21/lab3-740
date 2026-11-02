@@ -1,0 +1,288 @@
+
+=== N=64 iterations=1908 repeat=1 ===
+matmul-neon_handtuned-start size=64 seed=42 threads=1 pin=0 prime_weight=1.000
+matmul-neon_handtuned-end fingerprint=1.294963e+02 wall_us=20326 iterations=1908 threads=1 pin=0 prime_weight=1.000 size=64 flop=1000341504 bytes=93782016
+Performance counter statistics,
+107798174,cpu-cycles,4.045743,GHz,
+453370546,instructions,17.015,G/sec,
+Total test time,0.028256,seconds,
+scaling_cur_freq_khz_max=4396800
+scaling_cur_freq_samples=35
+
+derived={'ipc': 4.205734932022132, 'cpi': 0.23777057188889372, 'scaling_cur_freq_ghz': 4.3968, 'scaling_cur_freq_samples': 35.0, 'effective_ghz': 3.8150542893544737, 'clock_of_max_pct': 86.76888394638085}
+
+=== N=64 iterations=1908 repeat=2 ===
+matmul-neon_handtuned-start size=64 seed=42 threads=1 pin=0 prime_weight=1.000
+matmul-neon_handtuned-end fingerprint=1.294963e+02 wall_us=20271 iterations=1908 threads=1 pin=0 prime_weight=1.000 size=64 flop=1000341504 bytes=93782016
+Performance counter statistics,
+113177398,cpu-cycles,3.545311,GHz,
+453164339,instructions,14.195,G/sec,
+Total test time,0.032907,seconds,
+scaling_cur_freq_khz_max=4396800
+scaling_cur_freq_samples=33
+
+derived={'ipc': 4.004018001898223, 'cpi': 0.24974912688352557, 'scaling_cur_freq_ghz': 4.3968, 'scaling_cur_freq_samples': 33.0, 'effective_ghz': 3.4393107241620324, 'clock_of_max_pct': 78.22304230717869}
+
+=== N=64 iterations=1908 repeat=3 ===
+matmul-neon_handtuned-start size=64 seed=42 threads=1 pin=0 prime_weight=1.000
+matmul-neon_handtuned-end fingerprint=1.294963e+02 wall_us=19853 iterations=1908 threads=1 pin=0 prime_weight=1.000 size=64 flop=1000341504 bytes=93782016
+Performance counter statistics,
+109305437,cpu-cycles,3.545970,GHz,
+453131364,instructions,14.700,G/sec,
+Total test time,0.031746,seconds,
+scaling_cur_freq_khz_max=4396800
+scaling_cur_freq_samples=31
+
+derived={'ipc': 4.145551917970924, 'cpi': 0.24122240410619644, 'scaling_cur_freq_ghz': 4.3968, 'scaling_cur_freq_samples': 31.0, 'effective_ghz': 3.4431247086247083, 'clock_of_max_pct': 78.30978685918642}
+
+=== N=128 iterations=239 repeat=1 ===
+matmul-neon_handtuned-start size=128 seed=42 threads=1 pin=0 prime_weight=1.000
+matmul-neon_handtuned-end fingerprint=7.182121e+02 wall_us=23888 iterations=239 threads=1 pin=0 prime_weight=1.000 size=128 flop=1002438656 bytes=46989312
+Performance counter statistics,
+123205879,cpu-cycles,4.327062,GHz,
+448156691,instructions,15.740,G/sec,
+Total test time,0.028820,seconds,
+scaling_cur_freq_khz_max=4396800
+scaling_cur_freq_samples=31
+
+derived={'ipc': 3.6374619022847114, 'cpi': 0.2749169687170865, 'scaling_cur_freq_ghz': 4.3968, 'scaling_cur_freq_samples': 31.0, 'effective_ghz': 4.275013150589869, 'clock_of_max_pct': 97.23010258801558}
+
+=== N=128 iterations=239 repeat=2 ===
+matmul-neon_handtuned-start size=128 seed=42 threads=1 pin=0 prime_weight=1.000
+matmul-neon_handtuned-end fingerprint=7.182121e+02 wall_us=23865 iterations=239 threads=1 pin=0 prime_weight=1.000 size=128 flop=1002438656 bytes=46989312
+Performance counter statistics,
+127985541,cpu-cycles,3.916526,GHz,
+448382684,instructions,13.721,G/sec,
+Total test time,0.033772,seconds,
+scaling_cur_freq_khz_max=4396800
+scaling_cur_freq_samples=32
+
+derived={'ipc': 3.503385464456489, 'cpi': 0.2854381883311087, 'scaling_cur_freq_ghz': 4.3968, 'scaling_cur_freq_samples': 32.0, 'effective_ghz': 3.7896938588179556, 'clock_of_max_pct': 86.1920910393458}
+
+=== N=128 iterations=239 repeat=3 ===
+matmul-neon_handtuned-start size=128 seed=42 threads=1 pin=0 prime_weight=1.000
+matmul-neon_handtuned-end fingerprint=7.182121e+02 wall_us=23850 iterations=239 threads=1 pin=0 prime_weight=1.000 size=128 flop=1002438656 bytes=46989312
+Performance counter statistics,
+131000897,cpu-cycles,4.092812,GHz,
+448239889,instructions,14.004,G/sec,
+Total test time,0.032999,seconds,
+scaling_cur_freq_khz_max=4396800
+scaling_cur_freq_samples=31
+
+derived={'ipc': 3.4216551127890367, 'cpi': 0.292256223095754, 'scaling_cur_freq_ghz': 4.3968, 'scaling_cur_freq_samples': 31.0, 'effective_ghz': 3.969844449831813, 'clock_of_max_pct': 90.28940251618934}
+
+=== N=192 iterations=71 repeat=1 ===
+matmul-neon_handtuned-start size=192 seed=42 threads=1 pin=0 prime_weight=1.000
+matmul-neon_handtuned-end fingerprint=2.154884e+02 wall_us=25136 iterations=71 threads=1 pin=0 prime_weight=1.000 size=192 flop=1005060096 bytes=31408128
+Performance counter statistics,
+132573076,cpu-cycles,3.759972,GHz,
+448436456,instructions,12.718,G/sec,
+Total test time,0.036158,seconds,
+scaling_cur_freq_khz_max=4396800
+scaling_cur_freq_samples=31
+
+derived={'ipc': 3.3825605434394537, 'cpi': 0.2956340284697995, 'scaling_cur_freq_ghz': 4.3968, 'scaling_cur_freq_samples': 31.0, 'effective_ghz': 3.66649361137231, 'clock_of_max_pct': 83.39004756578217}
+
+=== N=192 iterations=71 repeat=2 ===
+matmul-neon_handtuned-start size=192 seed=42 threads=1 pin=0 prime_weight=1.000
+matmul-neon_handtuned-end fingerprint=2.154884e+02 wall_us=25161 iterations=71 threads=1 pin=0 prime_weight=1.000 size=192 flop=1005060096 bytes=31408128
+Performance counter statistics,
+136622499,cpu-cycles,4.087524,GHz,
+448379125,instructions,13.415,G/sec,
+Total test time,0.034367,seconds,
+scaling_cur_freq_khz_max=4396800
+scaling_cur_freq_samples=38
+
+derived={'ipc': 3.281883498559048, 'cpi': 0.3047030768883364, 'scaling_cur_freq_ghz': 4.3968, 'scaling_cur_freq_samples': 38.0, 'effective_ghz': 3.9753978816888296, 'clock_of_max_pct': 90.41570873564478}
+
+=== N=192 iterations=71 repeat=3 ===
+matmul-neon_handtuned-start size=192 seed=42 threads=1 pin=0 prime_weight=1.000
+matmul-neon_handtuned-end fingerprint=2.154884e+02 wall_us=25147 iterations=71 threads=1 pin=0 prime_weight=1.000 size=192 flop=1005060096 bytes=31408128
+Performance counter statistics,
+130998358,cpu-cycles,4.321091,GHz,
+448909894,instructions,14.808,G/sec,
+Total test time,0.030760,seconds,
+scaling_cur_freq_khz_max=4396800
+scaling_cur_freq_samples=32
+
+derived={'ipc': 3.4268360371356716, 'cpi': 0.29181437021301204, 'scaling_cur_freq_ghz': 4.3968, 'scaling_cur_freq_samples': 32.0, 'effective_ghz': 4.258724252275683, 'clock_of_max_pct': 96.85963091966164}
+
+=== N=256 iterations=30 repeat=1 ===
+matmul-neon_handtuned-start size=256 seed=42 threads=1 pin=0 prime_weight=1.000
+matmul-neon_handtuned-end fingerprint=1.358728e+03 wall_us=26556 iterations=30 threads=1 pin=0 prime_weight=1.000 size=256 flop=1006632960 bytes=23592960
+Performance counter statistics,
+144280564,cpu-cycles,4.324039,GHz,
+449277473,instructions,13.465,G/sec,
+Total test time,0.033927,seconds,
+scaling_cur_freq_khz_max=4396800
+scaling_cur_freq_samples=34
+
+derived={'ipc': 3.1139154196818914, 'cpi': 0.32113910149240893, 'scaling_cur_freq_ghz': 4.3968, 'scaling_cur_freq_samples': 34.0, 'effective_ghz': 4.252676747133552, 'clock_of_max_pct': 96.72208758946397}
+
+=== N=256 iterations=30 repeat=2 ===
+matmul-neon_handtuned-start size=256 seed=42 threads=1 pin=0 prime_weight=1.000
+matmul-neon_handtuned-end fingerprint=1.358728e+03 wall_us=26500 iterations=30 threads=1 pin=0 prime_weight=1.000 size=256 flop=1006632960 bytes=23592960
+Performance counter statistics,
+139990832,cpu-cycles,3.954619,GHz,
+449370709,instructions,12.694,G/sec,
+Total test time,0.036338,seconds,
+scaling_cur_freq_khz_max=4396800
+scaling_cur_freq_samples=36
+
+derived={'ipc': 3.210000987778971, 'cpi': 0.3115263838880963, 'scaling_cur_freq_ghz': 4.3968, 'scaling_cur_freq_samples': 36.0, 'effective_ghz': 3.852463867026253, 'clock_of_max_pct': 87.6197204108955}
+
+=== N=256 iterations=30 repeat=3 ===
+matmul-neon_handtuned-start size=256 seed=42 threads=1 pin=0 prime_weight=1.000
+matmul-neon_handtuned-end fingerprint=1.358728e+03 wall_us=26542 iterations=30 threads=1 pin=0 prime_weight=1.000 size=256 flop=1006632960 bytes=23592960
+Performance counter statistics,
+141392573,cpu-cycles,3.988489,GHz,
+449243249,instructions,12.673,G/sec,
+Total test time,0.036385,seconds,
+scaling_cur_freq_khz_max=4396800
+scaling_cur_freq_samples=33
+
+derived={'ipc': 3.1772761430687027, 'cpi': 0.31473499783187614, 'scaling_cur_freq_ghz': 4.3968, 'scaling_cur_freq_samples': 33.0, 'effective_ghz': 3.8860127250240484, 'clock_of_max_pct': 88.38274938646398}
+
+=== N=384 iterations=10 repeat=1 ===
+matmul-neon_handtuned-start size=384 seed=42 threads=1 pin=0 prime_weight=1.000
+matmul-neon_handtuned-end fingerprint=1.622357e+03 wall_us=30177 iterations=10 threads=1 pin=0 prime_weight=1.000 size=384 flop=1132462080 bytes=17694720
+Performance counter statistics,
+157156580,cpu-cycles,3.918649,GHz,
+503664716,instructions,12.559,G/sec,
+Total test time,0.041019,seconds,
+scaling_cur_freq_khz_max=4396800
+scaling_cur_freq_samples=29
+
+derived={'ipc': 3.2048592302021333, 'cpi': 0.3120261852926779, 'scaling_cur_freq_ghz': 4.3968, 'scaling_cur_freq_samples': 29.0, 'effective_ghz': 3.8313118311026595, 'clock_of_max_pct': 87.13864244683997}
+
+=== N=384 iterations=10 repeat=2 ===
+matmul-neon_handtuned-start size=384 seed=42 threads=1 pin=0 prime_weight=1.000
+matmul-neon_handtuned-end fingerprint=1.622357e+03 wall_us=30148 iterations=10 threads=1 pin=0 prime_weight=1.000 size=384 flop=1132462080 bytes=17694720
+Performance counter statistics,
+158937577,cpu-cycles,4.005888,GHz,
+504061961,instructions,12.704,G/sec,
+Total test time,0.040728,seconds,
+scaling_cur_freq_khz_max=4396800
+scaling_cur_freq_samples=33
+
+derived={'ipc': 3.171446114344627, 'cpi': 0.3153135711424969, 'scaling_cur_freq_ghz': 4.3968, 'scaling_cur_freq_samples': 33.0, 'effective_ghz': 3.9024154635631505, 'clock_of_max_pct': 88.75581021568301}
+
+=== N=384 iterations=10 repeat=3 ===
+matmul-neon_handtuned-start size=384 seed=42 threads=1 pin=0 prime_weight=1.000
+matmul-neon_handtuned-end fingerprint=1.622357e+03 wall_us=30234 iterations=10 threads=1 pin=0 prime_weight=1.000 size=384 flop=1132462080 bytes=17694720
+Performance counter statistics,
+159053258,cpu-cycles,4.230210,GHz,
+503906366,instructions,13.402,G/sec,
+Total test time,0.038533,seconds,
+scaling_cur_freq_khz_max=4396800
+scaling_cur_freq_samples=31
+
+derived={'ipc': 3.168161233138651, 'cpi': 0.3156405013545711, 'scaling_cur_freq_ghz': 4.3968, 'scaling_cur_freq_samples': 31.0, 'effective_ghz': 4.127715412763086, 'clock_of_max_pct': 93.87999028300324}
+
+=== N=512 iterations=10 repeat=1 ===
+matmul-neon_handtuned-start size=512 seed=42 threads=1 pin=0 prime_weight=1.000
+matmul-neon_handtuned-end fingerprint=3.047899e+03 wall_us=71904 iterations=10 threads=1 pin=0 prime_weight=1.000 size=512 flop=2684354560 bytes=31457280
+Performance counter statistics,
+342248694,cpu-cycles,4.288682,GHz,
+1141891133,instructions,14.309,G/sec,
+Total test time,0.080447,seconds,
+scaling_cur_freq_khz_max=4396800
+scaling_cur_freq_samples=35
+
+derived={'ipc': 3.336436787104292, 'cpi': 0.2997209489672077, 'scaling_cur_freq_ghz': 4.3968, 'scaling_cur_freq_samples': 35.0, 'effective_ghz': 4.254337563861921, 'clock_of_max_pct': 96.75986089569508}
+
+=== N=512 iterations=10 repeat=2 ===
+matmul-neon_handtuned-start size=512 seed=42 threads=1 pin=0 prime_weight=1.000
+matmul-neon_handtuned-end fingerprint=3.047899e+03 wall_us=71864 iterations=10 threads=1 pin=0 prime_weight=1.000 size=512 flop=2684354560 bytes=31457280
+Performance counter statistics,
+342628396,cpu-cycles,4.049288,GHz,
+1142295377,instructions,13.500,G/sec,
+Total test time,0.085553,seconds,
+scaling_cur_freq_khz_max=4396800
+scaling_cur_freq_samples=35
+
+derived={'ipc': 3.3339191682174527, 'cpi': 0.2999472841252688, 'scaling_cur_freq_ghz': 4.3968, 'scaling_cur_freq_samples': 35.0, 'effective_ghz': 4.004867111615022, 'clock_of_max_pct': 91.08595141045811}
+
+=== N=512 iterations=10 repeat=3 ===
+matmul-neon_handtuned-start size=512 seed=42 threads=1 pin=0 prime_weight=1.000
+matmul-neon_handtuned-end fingerprint=3.047899e+03 wall_us=71938 iterations=10 threads=1 pin=0 prime_weight=1.000 size=512 flop=2684354560 bytes=31457280
+Performance counter statistics,
+343999097,cpu-cycles,4.099943,GHz,
+1141681414,instructions,13.607,G/sec,
+Total test time,0.084913,seconds,
+scaling_cur_freq_khz_max=4396800
+scaling_cur_freq_samples=36
+
+derived={'ipc': 3.318850031748775, 'cpi': 0.30130918554131775, 'scaling_cur_freq_ghz': 4.3968, 'scaling_cur_freq_samples': 36.0, 'effective_ghz': 4.051194716945579, 'clock_of_max_pct': 92.13961783446095}
+
+=== N=1024 iterations=10 repeat=1 ===
+matmul-neon_handtuned-start size=1024 seed=42 threads=1 pin=0 prime_weight=1.000
+matmul-neon_handtuned-end fingerprint=2.718677e+04 wall_us=631934 iterations=10 threads=1 pin=0 prime_weight=1.000 size=1024 flop=21474836480 bytes=125829120
+Performance counter statistics,
+2809730391,cpu-cycles,4.391492,GHz,
+8823165965,instructions,13.790,G/sec,
+Total test time,0.640193,seconds,
+scaling_cur_freq_khz_max=4396800
+scaling_cur_freq_samples=56
+
+derived={'ipc': 3.1402180057068687, 'cpi': 0.31844922810539017, 'scaling_cur_freq_ghz': 4.3968, 'scaling_cur_freq_samples': 56.0, 'effective_ghz': 4.388880214247891, 'clock_of_max_pct': 99.8198738684473}
+
+=== N=1024 iterations=10 repeat=2 ===
+matmul-neon_handtuned-start size=1024 seed=42 threads=1 pin=0 prime_weight=1.000
+matmul-neon_handtuned-end fingerprint=2.718677e+04 wall_us=631703 iterations=10 threads=1 pin=0 prime_weight=1.000 size=1024 flop=21474836480 bytes=125829120
+Performance counter statistics,
+2813303308,cpu-cycles,4.382859,GHz,
+8822603287,instructions,13.745,G/sec,
+Total test time,0.644988,seconds,
+scaling_cur_freq_khz_max=4396800
+scaling_cur_freq_samples=56
+
+derived={'ipc': 3.136029898344683, 'cpi': 0.31887451089922275, 'scaling_cur_freq_ghz': 4.3968, 'scaling_cur_freq_samples': 56.0, 'effective_ghz': 4.3617917046518695, 'clock_of_max_pct': 99.20377785325395}
+
+=== N=1024 iterations=10 repeat=3 ===
+matmul-neon_handtuned-start size=1024 seed=42 threads=1 pin=0 prime_weight=1.000
+matmul-neon_handtuned-end fingerprint=2.718677e+04 wall_us=634778 iterations=10 threads=1 pin=0 prime_weight=1.000 size=1024 flop=21474836480 bytes=125829120
+Performance counter statistics,
+2829498861,cpu-cycles,4.381265,GHz,
+8822399013,instructions,13.661,G/sec,
+Total test time,0.646961,seconds,
+scaling_cur_freq_khz_max=4396800
+scaling_cur_freq_samples=54
+
+derived={'ipc': 3.1180076212796184, 'cpi': 0.32071762531151343, 'scaling_cur_freq_ghz': 4.3968, 'scaling_cur_freq_samples': 54.0, 'effective_ghz': 4.373523073260984, 'clock_of_max_pct': 99.47059391514247}
+
+=== N=2048 iterations=10 repeat=1 ===
+matmul-neon_handtuned-start size=2048 seed=42 threads=1 pin=0 prime_weight=1.000
+matmul-neon_handtuned-end fingerprint=5.477577e+04 wall_us=11824854 iterations=10 threads=1 pin=0 prime_weight=1.000 size=2048 flop=171798691840 bytes=503316480
+Performance counter statistics,
+52019560360,cpu-cycles,4.393196,GHz,
+70110244371,instructions,5.921,G/sec,
+Total test time,11.843786,seconds,
+scaling_cur_freq_khz_max=4396800
+scaling_cur_freq_samples=443
+
+derived={'ipc': 1.3477669531576948, 'cpi': 0.7419680365786469, 'scaling_cur_freq_ghz': 4.3968, 'scaling_cur_freq_samples': 443.0, 'effective_ghz': 4.392139503364887, 'clock_of_max_pct': 99.89400253286225}
+
+=== N=2048 iterations=10 repeat=2 ===
+matmul-neon_handtuned-start size=2048 seed=42 threads=1 pin=0 prime_weight=1.000
+matmul-neon_handtuned-end fingerprint=5.477577e+04 wall_us=11681428 iterations=10 threads=1 pin=0 prime_weight=1.000 size=2048 flop=171798691840 bytes=503316480
+Performance counter statistics,
+51356813795,cpu-cycles,4.392291,GHz,
+70106133188,instructions,5.996,G/sec,
+Total test time,11.701140,seconds,
+scaling_cur_freq_khz_max=4396800
+scaling_cur_freq_samples=441
+
+derived={'ipc': 1.3650794900914471, 'cpi': 0.7325580724482277, 'scaling_cur_freq_ghz': 4.3968, 'scaling_cur_freq_samples': 441.0, 'effective_ghz': 4.389043614126487, 'clock_of_max_pct': 99.82359020484186}
+
+=== N=2048 iterations=10 repeat=3 ===
+matmul-neon_handtuned-start size=2048 seed=42 threads=1 pin=0 prime_weight=1.000
+matmul-neon_handtuned-end fingerprint=5.477577e+04 wall_us=11719013 iterations=10 threads=1 pin=0 prime_weight=1.000 size=2048 flop=171798691840 bytes=503316480
+Performance counter statistics,
+51084835142,cpu-cycles,4.365795,GHz,
+70106885121,instructions,5.991,G/sec,
+Total test time,11.742230,seconds,
+scaling_cur_freq_khz_max=4396800
+scaling_cur_freq_samples=438
+
+derived={'ipc': 1.3723619725134593, 'cpi': 0.7286707297554419, 'scaling_cur_freq_ghz': 4.3968, 'scaling_cur_freq_samples': 438.0, 'effective_ghz': 4.3505224426705995, 'clock_of_max_pct': 98.94747185841065}
