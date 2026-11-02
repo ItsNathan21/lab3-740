@@ -3,7 +3,7 @@ import sys
 
 FREQUENCIES = [768000, 1497600, 2112000, 3129600, 3974400, 4396800]
 
-OUT_DIR = "task_output"
+OUT_DIR = "../task_output"
 
 
 def changeFreq(freq):
