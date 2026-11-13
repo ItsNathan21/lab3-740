@@ -57,12 +57,27 @@
 // ===========================================================================
 static void morph_scalar(const uint8_t *in, uint8_t *out,
                          int W, int H, int K, int op) {
-    // ---- TODO(Task 10.10) ---------------------------------------------------
-    // Remove this line once you write the real thing. It copies the input
-    // through unchanged, so the damage survives and residual stays high.
-    (void)K; (void)op;
-    memcpy(out, in, (size_t)W * H);
-    // -------------------------------------------------------------------------
+    const int radius = K / 2;
+    const int erode = op == 0;
+
+    // Clip the window to the image at the borders.
+    for (int y = 0; y < H; ++y) {
+        const int top = y < radius ? 0 : y - radius;
+        const int bottom = y + radius < H ? y + radius : H - 1;
+        for (int x = 0; x < W; ++x) {
+            const int left = x < radius ? 0 : x - radius;
+            const int right = x + radius < W ? x + radius : W - 1;
+            uint8_t extreme = erode ? UINT8_MAX : 0;
+            for (int yy = top; yy <= bottom; ++yy) {
+                const uint8_t *row = in + (size_t)yy * W;
+                for (int xx = left; xx <= right; ++xx) {
+                    if (erode ? row[xx] < extreme : row[xx] > extreme)
+                        extreme = row[xx];
+                }
+            }
+            out[(size_t)y * W + x] = extreme;
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------

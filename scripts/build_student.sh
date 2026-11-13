@@ -6,9 +6,8 @@
 #   bash scripts/build_student.sh vtcm     # Task 11    kernels/lab3/vtcm/student_vtcm.c
 #   bash scripts/build_student.sh memshare # Task 12    kernels/lab3/memshare/memshare.cpp
 #
-# Your file replaces the reference implementation of the same entry point, so
-# the rest of the kernel - the FastRPC plumbing, the host binary already on the
-# board - is untouched and you only ever rebuild the one .so.
+# The three DSP exercises share one skeleton. Build their student sources
+# together so testing a later exercise keeps the earlier implementations.
 #
 # Run it in the lab container, or from your own machine as:
 #   python scripts/lab3.py run bash scripts/build_student.sh conv
@@ -17,6 +16,8 @@
 # that push means silently measuring the OLD code). Add --no-push to skip it.
 # Other options are passed straight through to build_dsp_skel.sh, so --arch,
 # --sdk and --threads all work here too.
+# For VTCM, STAGE_COPY_MODE selects HVX (0), serial DMA (1), or overlap (2).
+# STAGE_DMA_FLUSH=0 disables source cache cleaning for the 11.7 experiment.
 
 set -euo pipefail
 
@@ -82,24 +83,12 @@ fi
 
 case "$WHICH" in
     conv)
-        SRC="$ROOT/kernels/lab3/conv/student_conv.c"
-        KDIR="$ROOT/kernels/convolution/dsp"
-        DROP="dsp_conv_hvx_imp.c"
-        OUT="$KDIR/prebuilt/libdsp_conv_skel.so"
         RUN='./conv_dsp --H 256 --W 256 --cin 64 --cout 64 --k 3 --iterations 5 --variant hvx'
         ;;
     morph)
-        SRC="$ROOT/kernels/lab3/morph/student_morph.c"
-        KDIR="$ROOT/kernels/convolution/dsp"
-        DROP="dsp_conv_morph_imp.c"
-        OUT="$KDIR/prebuilt/libdsp_conv_skel.so"
         RUN='PROFILER:python profiler.py morph dsp -p op=erode -p k=3 -p write_pgm=true'
         ;;
     vtcm)
-        SRC="$ROOT/kernels/lab3/vtcm/student_vtcm.c"
-        KDIR="$ROOT/kernels/convolution/dsp"
-        DROP="dsp_conv_stage_imp.c"
-        OUT="$KDIR/prebuilt/libdsp_conv_skel.so"
         RUN='PROFILER:python profiler.py stage dsp -p impl=staged -p p=1'
         ;;
     *)
@@ -107,15 +96,30 @@ case "$WHICH" in
         exit 2 ;;
 esac
 
-[ -f "$SRC" ] || { echo "error: your file is missing: $SRC" >&2; exit 1; }
-
-echo "building $(basename "$SRC")  (replacing $DROP)"
+KDIR="$ROOT/kernels/convolution/dsp"
+OUT="$KDIR/prebuilt/libdsp_conv_skel.so"
+echo "building the student convolution, morphology and VTCM implementations"
 echo
 # build_dsp_skel.sh ends with its own "Push it with: adb push ..." hint; drop it,
 # since this script pushes for you. pipefail keeps a failed build fatal.
 bash "$ROOT/scripts/build_dsp_skel.sh" "$KDIR" \
-    --exclude "$DROP" --add "$SRC" "$@" \
+    --exclude dsp_conv_hvx_imp.c --add "$ROOT/kernels/lab3/conv/student_conv.c" \
+    --exclude dsp_conv_morph_imp.c --add "$ROOT/kernels/lab3/morph/student_morph.c" \
+    --exclude dsp_conv_stage_imp.c --add "$ROOT/kernels/lab3/vtcm/student_vtcm.c" "$@" \
     | awk '/^Push it with:/ {skip = 2} skip > 0 {skip--; next} {print}'
+
+if [ "$WHICH" = morph ]; then
+    # The bundled host binary predates dog.pgm support. Build the current client.
+    while [ "$#" -ge 2 ]; do
+        if [ "$1" = --sdk ]; then
+            export SDK_ROOT="$2"
+            break
+        fi
+        shift
+    done
+    bash "$KDIR/build_stub.sh" morph
+    push "$KDIR/prebuilt/conv_morph" /data/local/tmp/profiler-kernels/dsp
+fi
 
 echo
 push "$OUT" /data/local/tmp/profiler-kernels/dsp

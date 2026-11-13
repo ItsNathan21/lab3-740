@@ -22,7 +22,11 @@
 #include "qurt_hvx.h"
 #include "qurt_thread.h"
 #include "qurt.h"
+#if __has_include("dma_utils.h")
 #include "dma_utils.h"
+#else
+#include <hexagon_protos.h>
+#endif
 #include "qhdsp_hvx.h"
 #include <hexagon_types.h>
 #include <hvx_hexagon_protos.h>
@@ -112,6 +116,7 @@ static void t5_copy(void *dst, const void *src, int bytes, int how) {
          * of the cache first or it may transfer stale data. */
         qurt_mem_cache_clean((qurt_addr_t)src, (qurt_size_t)bytes,
                              QURT_MEM_CACHE_FLUSH, QURT_MEM_DCACHE);
+#if __has_include("dma_utils.h")
         void *desc = 0;
         if (posix_memalign(&desc, 16, DMA_DESC_SIZE_1D) == 0 && desc) {
             memset(desc, 0, DMA_DESC_SIZE_1D);
@@ -131,6 +136,18 @@ static void t5_copy(void *dst, const void *src, int bytes, int how) {
             }
             free(desc);
         }
+#else
+        // SDK installs without dma_utils can submit a type-0 descriptor directly.
+        if ((Q6_R_dmpoll() & 3) == 0) {
+            uint32_t desc[4] __attribute__((aligned(16))) = {
+                0, (uint32_t)bytes | (1u << 29) | (1u << 30),
+                (uint32_t)(uintptr_t)src, (uint32_t)(uintptr_t)dst
+            };
+            __asm__ volatile("release(%0):at" :: "r"(desc) : "memory");
+            Q6_dmstart_A(desc);
+            if ((Q6_R_dmwait() & 3) == 0) return;
+        }
+#endif
         memcpy(dst, src, (size_t)bytes);   /* fallback if DMA setup failed */
         return;
     }

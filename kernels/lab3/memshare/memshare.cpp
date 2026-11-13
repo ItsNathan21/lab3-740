@@ -14,10 +14,8 @@
 // FD plus an offset, not a pointer - so a buffer with no FD cannot be shared,
 // and the harness will refuse the run rather than silently fall back.
 //
-// As shipped this file allocates ordinary heap memory and returns -1 for the FD.
-// That builds and loads, so nothing is blocked while you work, but the harness
-// will stop with "the buffer is not exportable". Set MEMSHARE_STUB_ONLY to 0 and
-// fill in the five TODOs to get the real path.
+// Set MEMSHARE_STUB_ONLY to 1 to exercise the heap-only baseline, which
+// returns -1 when the harness asks for a file descriptor.
 //
 // On this board the rpcmem symbols live in /vendor/lib64/libcdsprpc.so.
 // There is no librpcmem.so here; trying it first is harmless and portable.
@@ -33,6 +31,7 @@
 // the harness allocated the memory itself and your code never ran.
 
 #include <dlfcn.h>     // dlopen, dlsym
+#include <limits.h>    // INT_MAX
 #include <stdint.h>
 #include <stddef.h>
 #include <stdlib.h>
@@ -42,15 +41,14 @@
 #include <atomic>
 
 // -----------------------------------------------------------------------------
-// SWITCH: the lab should not block before you finish the TODOs.
-// Keep MEMSHARE_STUB_ONLY = 1 while you implement. When you are done,
-// set it to 0 to enable the rpcmem path.
+// Enable the rpcmem path for the shared-buffer run.
 // -----------------------------------------------------------------------------
-#define MEMSHARE_STUB_ONLY 1
+#define MEMSHARE_STUB_ONLY 0
 
 // Round up to the OS page size (helps both fallback and rpcmem).
 static size_t page_align(size_t n) {
-  size_t p = (size_t)getpagesize();
+  const size_t p = (size_t)getpagesize();
+  if (n == 0 || n > SIZE_MAX - (p - 1)) return 0;
   return (n + p - 1) & ~(p - 1);
 }
 
@@ -74,6 +72,7 @@ int GetSharedBufferFd(void* ptr);
 extern "C" __attribute__((visibility("default")))
 void* AllocateSharedBuffer(size_t size) {
   size = page_align(size);
+  if (size == 0) return nullptr;
   void* ptr = nullptr;
   if (posix_memalign(&ptr, (size_t)getpagesize(), size) != 0) return nullptr;
 
@@ -98,7 +97,7 @@ int GetSharedBufferFd(void* /*ptr*/) {
 
 #else
 // ============================================================================
-// ZERO-COPY MODE (you fill the TODOs)
+// ZERO-COPY MODE
 // ----------------------------------------------------------------------------
 // Context: Qualcomm's rpcmem allocator can return a pointer that also maps to
 // a shareable file descriptor (FD). QNN's HTP "Shared Buffer" path expects
@@ -123,32 +122,46 @@ static rpcmem_to_fd_t    p_rpcmem_to_fd  = nullptr;
 static std::once_flag    g_once;
 static std::atomic<bool> g_has_rpcmem{false};
 
-// One-time loader:
-//
-// You should:
-//  - try dlopen("librpcmem.so") first; if that fails, try dlopen("libcdsprpc.so").
-//  - use dlsym to resolve: "rpcmem_init", "rpcmem_deinit", "rpcmem_alloc",
-//                          "rpcmem_free", "rpcmem_to_fd".
-//  - if alloc/free are present, call rpcmem_init() once (if it exists), set g_has_rpcmem=true.
-//  - if a load attempt fails or required symbols are missing, dlclose any opened handle
-//    and leave g_has_rpcmem=false so the code will fall back gracefully.
 static void try_init_rpcmem() {
-  // TODO(A): implement dynamic loading with dlopen/dlsym as described above.
-  // Functions to look up with dlsym: rpcmem_init, rpcmem_deinit, rpcmem_alloc,
-  //                                  rpcmem_free, rpcmem_to_fd.
+  const char* libraries[] = {"librpcmem.so", "libcdsprpc.so"};
+  for (const char* library : libraries) {
+    void* handle = dlopen(library, RTLD_NOW | RTLD_LOCAL);
+    if (!handle) continue;
+
+    auto alloc = reinterpret_cast<rpcmem_alloc_t>(dlsym(handle, "rpcmem_alloc"));
+    auto release = reinterpret_cast<rpcmem_free_t>(dlsym(handle, "rpcmem_free"));
+    auto to_fd = reinterpret_cast<rpcmem_to_fd_t>(dlsym(handle, "rpcmem_to_fd"));
+    if (!alloc || !release || !to_fd) {
+      dlclose(handle);
+      continue;
+    }
+
+    g_rpcmem_so = handle;
+    p_rpcmem_alloc = alloc;
+    p_rpcmem_free = release;
+    p_rpcmem_to_fd = to_fd;
+    p_rpcmem_init = reinterpret_cast<rpcmem_init_t>(dlsym(handle, "rpcmem_init"));
+    p_rpcmem_deinit = reinterpret_cast<rpcmem_deinit_t>(dlsym(handle, "rpcmem_deinit"));
+    if (p_rpcmem_init) p_rpcmem_init();
+    g_has_rpcmem.store(true);
+    return;
+  }
 }
 
 extern "C" __attribute__((visibility("default")))
 void* AllocateSharedBuffer(size_t size) {
-  std::call_once(g_once, try_init_rpcmem);
   size = page_align(size);
+  if (size == 0 || size > INT_MAX) return nullptr;
+  std::call_once(g_once, try_init_rpcmem);
 
   if (g_has_rpcmem.load()) {
-    // TODO(B): allocate via rpcmem to get a real shared buffer and FD.
-    // You should call p_rpcmem_alloc with:
-    //   - heap  = -1  (let rpcmem choose a default heap)
-    //   - flags = 1   (cached mapping works well for this lab)
-    // If allocation succeeds, return the pointer you got from p_rpcmem_alloc.
+    // Keep a single allocation backend for the lifetime of the library.
+    // This lets FreeSharedBuffer identify the allocator for every live pointer.
+    constexpr int default_heap = -1;
+    constexpr int system_heap = 25;
+    constexpr uint32_t cached = 1;
+    void* ptr = p_rpcmem_alloc(default_heap, cached, static_cast<int>(size));
+    return ptr ? ptr : p_rpcmem_alloc(system_heap, cached, static_cast<int>(size));
   }
 
   // Fallback remains available even in zero-copy build, in case runtime load fails.
@@ -165,34 +178,20 @@ void* AllocateSharedBuffer(size_t size) {
 extern "C" __attribute__((visibility("default")))
 void FreeSharedBuffer(void* ptr) {
   if (!ptr) return;
-  if (g_has_rpcmem.load() && p_rpcmem_free) {
-    // TODO(C): free via rpcmem when the pointer came from rpcmem_alloc.
-    // If you only call FreeSharedBuffer on blocks you allocated here, it is fine
-    // to always call p_rpcmem_free when it is available.
-    return;
-  }
-  free(ptr);
+  if (g_has_rpcmem.load()) p_rpcmem_free(ptr);
+  else free(ptr);
 }
 
 extern "C" __attribute__((visibility("default")))
 int GetSharedBufferFd(void* ptr) {
-  if (g_has_rpcmem.load() && p_rpcmem_to_fd) {
-    // TODO(D): return the shareable file descriptor for this allocation.
-    // You should call p_rpcmem_to_fd(ptr) and return its value.
-    // A non-negative FD indicates true zero-copy support.
-  }
-  // Fallback: no FD available
-  return -1;
+  if (!ptr || !g_has_rpcmem.load()) return -1;
+  const int fd = p_rpcmem_to_fd(ptr);
+  return fd < 0 ? -1 : fd;
 }
 
-// Optional cleanup:
-// If you called rpcmem_init() during try_init_rpcmem(), you should
-// call rpcmem_deinit() here to be polite. Not strictly required for the lab.
 __attribute__((destructor))
 static void memshare_destructor() {
-  if (g_has_rpcmem.load() && p_rpcmem_deinit) {
-    // TODO(E): call rpcmem_deinit().
-  }
+  if (p_rpcmem_init && p_rpcmem_deinit) p_rpcmem_deinit();
   if (g_rpcmem_so) dlclose(g_rpcmem_so);
 }
 #endif  // MEMSHARE_STUB_ONLY

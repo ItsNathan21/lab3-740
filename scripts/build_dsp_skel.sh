@@ -252,6 +252,8 @@ DEFINES=()
 # `set -o pipefail` a grep that finds nothing would otherwise abort the build.
 MACRO="$(grep -rho '[A-Z][A-Z0-9_]*_MT_THREADS' "$SRC"/*.c 2>/dev/null | sort -u | head -1 || true)"
 if [ -n "$MACRO" ]; then DEFINES+=("-D$MACRO=$THREADS"); fi
+if [ -n "${STAGE_COPY_MODE:-}" ]; then DEFINES+=("-DSTAGE_COPY_MODE=$STAGE_COPY_MODE"); fi
+if [ -n "${STAGE_DMA_FLUSH:-}" ]; then DEFINES+=("-DSTAGE_DMA_FLUSH=$STAGE_DMA_FLUSH"); fi
 
 "$CLANG" \
     "-m$ARCH" -mhvx -mhvx-length=128B \

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # build_stub.sh — compile dsp_conv ARM64 stub.so + main exe (control container)
-# Usage: bash kernels/reduction/dsp/build_stub.sh
+# Usage: bash kernels/convolution/dsp/build_stub.sh [morph]
 # Requires the generated/ dir next to this script (it ships with the bundle).
 
 set -euo pipefail
@@ -49,6 +49,18 @@ OUT_DIR="$SCRIPT_DIR/prebuilt"
 
 mkdir -p "$OUT_DIR"
 
+build_morph() {
+    echo "Building conv_morph (Lab 3 Task 10 morphology)"
+    "$CC" -I "$SDK_INCS" -I "$SDK_INCS/stddef" -I "$GEN_DIR" \
+        "$SRC_DIR/dsp_conv_morph_main.c" -lm -ldl -o "$OUT_DIR/conv_morph"
+    file "$OUT_DIR/conv_morph"
+}
+
+if [ "${1:-}" = morph ]; then
+    build_morph
+    exit 0
+fi
+
 echo "=== Step 1: libdsp_conv_stub.so (DT_NEEDED: libcdsprpc.so) ==="
 "$CC" \
     -shared -fPIC \
@@ -79,9 +91,7 @@ echo "=== Step 3: conv_dsp_int8 (int8 in / int32 out, HVX vrmpy) ==="
 echo "int8 main built"; file "$OUT_DIR/conv_dsp_int8"
 
 echo ""
-echo "=== Step 4: conv_morph (Lab 3 Task 10 morphology) ==="
-"$CC"     -I "$SDK_INCS" -I "$SDK_INCS/stddef" -I "$GEN_DIR"     "$SRC_DIR/dsp_conv_morph_main.c"     -lm -ldl     -o "$OUT_DIR/conv_morph"
-echo "morph main built"; file "$OUT_DIR/conv_morph"
+build_morph
 
 echo ""
 echo "=== Step 5: conv_stage (Lab 3 Task 11 VTCM staging) ==="

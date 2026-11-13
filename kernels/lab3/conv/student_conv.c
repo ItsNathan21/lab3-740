@@ -1,21 +1,6 @@
-// student_conv.c — Lab 3, Task 10. Your file. Edit it.
+// student_conv.c — Lab 3, Task 10.1, multithreaded HVX convolution.
 //
-// This provides the HVX convolution that `conv_dsp --variant hvx` calls. It
-// works and it is correct, and it uses exactly ONE of the DSP's HVX vector
-// contexts. Your job in Task 10.1 is to make it use all of them.
-//
-// What is already done for you:
-//   * conv_hvx_stripe()  — the vector math. Computes one contiguous band of
-//                          output rows [oh_begin, oh_end). Correct. Leave it.
-//   * the VTCM staging   — Task 11.5 comes back to this. Leave it for now.
-//   * thread spawn/join  — boilerplate, already written.
-//
-// What is not:
-//   * MY_THREADS         — how many HVX contexts to use. Currently 1.
-//   * my_range()         — decides which rows a worker computes. Currently
-//                          every worker computes every row.
-//
-// Build it, push it, and measure it:
+// Build with --threads 1 for the baseline and --threads 8 for the HDK8850:
 //
 //   bash scripts/build_student.sh conv
 //   adb push kernels/convolution/dsp/prebuilt/libdsp_conv_skel.so \
@@ -43,17 +28,11 @@
 #define VFLOATS 32          // one 128-byte HVX vector holds 32 fp32 lanes
 #define MY_STACK (64 * 1024)
 
-// ===========================================================================
-// TASK 10.1 (a) — how many HVX contexts do you want?
-//
-// Run dsp_hello_test and it will tell you how many this DSP has. Do not
-// guess, and do not assume it matches the CPU core count: these are hardware
-// threads inside ONE Hexagon core, not independent cores.
-//
-// MY_THREADS must not exceed the size of the stripes[] arrays below, which are
-// sized from it, so change it here and everything else follows.
-// ===========================================================================
-#define MY_THREADS 1
+// The build script sets CONV_MT_THREADS. The HDK8850 has eight 128B contexts.
+#ifndef CONV_MT_THREADS
+#define CONV_MT_THREADS 8
+#endif
+#define MY_THREADS CONV_MT_THREADS
 
 typedef struct {
     const float *in;
@@ -65,14 +44,19 @@ typedef struct {
 } my_stripe_t;
 
 // ---------------------------------------------------------------------------
-// GIVEN. The vector math, over one band of output rows. Do not change this.
-//
 // The input-channel reduction accumulates in 32-lane HVX vectors, one tap at a
 // time, then folds horizontally per output element. Full vectors are used while
 // Cin >= 32; anything left over goes down the scalar tail. That asymmetry is
 // the subject of Task 10.5, so it is worth reading even though you do not edit
 // it.
 // ---------------------------------------------------------------------------
+static inline HVX_Vector load_vector(const float *p) {
+    if ((uintptr_t)p % sizeof(HVX_Vector) == 0)
+        return *(const HVX_Vector *)p;
+    // The Task 10.5 sweep includes channel counts that misalign taps.
+    return *(const HVX_UVector *)p;
+}
+
 static void conv_hvx_stripe(const my_stripe_t *s) {
     const int H = s->H, W = s->W, Cin = s->Cin, Cout = s->Cout, K = s->K;
     const int pad = K / 2;
@@ -100,8 +84,8 @@ static void conv_hvx_stripe(const my_stripe_t *s) {
                         const float *w_px  = &w[(((long)oc * K + kh) * K + kw) * Cin];
                         for (int iv = 0; iv < ic_vec; iv++) {
                             int ic = iv * VFLOATS;
-                            HVX_Vector vin = *((HVX_Vector *)(in_px + ic));
-                            HVX_Vector vw  = *((HVX_Vector *)(w_px + ic));
+                            HVX_Vector vin = load_vector(in_px + ic);
+                            HVX_Vector vw  = load_vector(w_px + ic);
                             HVX_Vector prod = Q6_Vsf_equals_Vqf32(Q6_Vqf32_vmpy_VsfVsf(vin, vw));
                             vacc = Q6_Vsf_equals_Vqf32(Q6_Vqf32_vadd_VsfVsf(vacc, prod));
                         }
@@ -117,40 +101,17 @@ static void conv_hvx_stripe(const my_stripe_t *s) {
     }
 }
 
-// ===========================================================================
-// TASK 10.1 (b) — my_worker(): the body of one HVX worker.
-//
-// Right now every worker computes EVERY output row, 0..H. With MY_THREADS = 1
-// that is correct. With MY_THREADS = N it is N threads doing identical
-// work: N times the energy, no speedup, and — because they all write the
-// same values to the same addresses — an unchanged fingerprint that will not
-// warn you.
-//
-// Change it so worker `id` of `nthreads` computes only its own share of the
-// H output rows, and the workers together cover every row exactly once.
-//
-// Two things to get right:
-//   * H is not always divisible by nthreads. Decide where the remainder goes.
-//   * Output rows are independent — a stripe reads input rows and read-only
-//     weights, and writes only its own output rows — so no locking is needed
-//     inside the loop. Convince yourself of that before you rely on it.
-//
-// qurt_hvx_lock() claims one of the DSP's HVX contexts for this thread. That
-// is the resource you are dividing the work across, and it is why the answer
-// to (a) is a property of the hardware rather than a tuning parameter.
-// ===========================================================================
+// Give each of the first H % nthreads workers one extra row.
 static void my_range(int id, int nthreads, int H, int *oh_begin, int *oh_end) {
-    // ---- TODO(Task 10.1): give worker `id` its own range of output rows ----
-    (void)id; (void)nthreads;
-    *oh_begin = 0;
-    *oh_end   = H;
-    // ------------------------------------------------------------------------
+    const int rows = H / nthreads;
+    const int extra = H % nthreads;
+    *oh_begin = id * rows + (id < extra ? id : extra);
+    *oh_end = *oh_begin + rows + (id < extra);
 }
 
 // This is the whole worker. It asks my_range() which rows are its own, claims
 // an HVX context, computes them, and releases the context. The calling thread
-// runs the same two steps for worker 0 without spawning, so my_range() above is
-// the ONLY place you need to change.
+// runs the same two steps for worker 0 without spawning.
 static void my_worker(void *arg) {
     my_stripe_t *s = (my_stripe_t *)arg;
     my_range(s->id, s->nthreads, s->H, &s->oh_begin, &s->oh_end);
