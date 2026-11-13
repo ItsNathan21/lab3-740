@@ -44,14 +44,28 @@ int main(int argc, char **argv) {
         return 1;
     }
     uint64_t state = seed;
-    volatile uint64_t taken_count = 0;
+    uint64_t taken_count = 0;
     double t0 = now_us();
     for (int it = 0; it < iters; it++) {
+#ifdef __clang__
+        /* Amortize the predictable loop branch across four decisions. */
+#pragma clang loop unroll_count(4)
+#endif
         for (long i = 0; i < size; i++) {
             state = state * 6364136223846793005ULL + 1;
-            /* The low bit alternates. Use the high bit for the branch. */
+#if defined(__aarch64__)
+            /* Skip the increment with one branch. Synchronize the instruction
+             * stream at the join to limit speculation into later decisions. */
+            __asm__ volatile(
+                "tbz %[state], #63, 1f\n\t"
+                "add %[count], %[count], #1\n"
+                "1: isb"
+                : [count] "+r" (taken_count)
+                : [state] "r" (state));
+#else
             if (state >> 63)
                 taken_count++;
+#endif
         }
     }
     double us = now_us() - t0;
