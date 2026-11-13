@@ -7,10 +7,7 @@
  *     python profiler.py custom cpu --binary bp_stress --core prime \
  *         --counters raw-br-pred,raw-br-mis-pred
  *
- * Your score is raw-br-mis-pred / raw-br-pred. As shipped, this file runs a
- * loop whose only branch is perfectly predictable, so it scores well under 1%.
- * Replace the marked block with your own code. Read the compiler PSA first:
- * clang will happily delete or flatten code whose result nobody uses.
+ * The score is raw-br-mis-pred / raw-br-pred.
  *
  * Profiler parameters reach this program as flags: `-p size=N` arrives as
  * `--size N`. Add your own flags the same way.
@@ -46,17 +43,16 @@ int main(int argc, char **argv) {
         printf("status: FAILED\nerror: need --size >= 1 and --iterations >= 1\n");
         return 1;
     }
-    (void)seed;   /* use it if your program needs random numbers */
-
-    uint64_t acc = 1;
+    uint64_t state = seed;
+    volatile uint64_t taken_count = 0;
     double t0 = now_us();
     for (int it = 0; it < iters; it++) {
-        /* ------------------------------------------------------------------
-         * YOUR CODE GOES HERE. The placeholder below is one predictable loop
-         * branch per step: the baseline you are trying to beat.
-         * ---------------------------------------------------------------- */
-        for (long i = 0; i < size; i++)
-            acc = acc * 6364136223846793005ULL + (uint64_t)i;
+        for (long i = 0; i < size; i++) {
+            state = state * 6364136223846793005ULL + 1;
+            /* The low bit alternates. Use the high bit for the branch. */
+            if (state >> 63)
+                taken_count++;
+        }
     }
     double us = now_us() - t0;
 
@@ -65,6 +61,6 @@ int main(int argc, char **argv) {
     printf("mean_us: %.1f\n", us / iters);     /* per iteration */
     printf("wall_us: %.1f\n", us);
     printf("flop: 0\n");
-    printf("fingerprint: %llu\n", (unsigned long long)acc);
+    printf("fingerprint: %llu\n", (unsigned long long)taken_count);
     return 0;
 }

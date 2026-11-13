@@ -6,10 +6,8 @@
  * Measure:
  *     python profiler.py custom cpu --binary rob_stress --core prime --counters stalls
  *
- * Your score is backend_stall_pct. As shipped, this file sums an array that
- * fits in cache, which keeps the backend busy rather than stalled. Replace
- * the marked block with your own code. Read the compiler PSA first: clang
- * will happily delete code whose result nobody uses.
+ * The score is backend_stall_pct. Each load in the pointer chase supplies
+ * the index for the next load.
  *
  * Profiler parameters reach this program as flags: `-p mb=N` arrives as
  * `--mb N`. Add your own flags the same way.
@@ -32,8 +30,8 @@ static double now_us(void) {
 }
 
 int main(int argc, char **argv) {
-    long mb = 1;              /* buffer size in MB */
-    int iters = 15000;        /* repeats; aim for a run of 200 ms or more */
+    long mb = 32;             /* buffer size in MiB */
+    int iters = 4;            /* near-full traversals of the buffer */
     unsigned long long seed = 42;
 
     for (int i = 1; i < argc - 1; i++) {
@@ -45,22 +43,33 @@ int main(int argc, char **argv) {
         printf("status: FAILED\nerror: need --mb >= 1 and --iterations >= 1\n");
         return 1;
     }
-    (void)seed;   /* use it if your program needs random numbers */
+    const size_t bytes_per_mib = 1u << 20;
+    if ((uintmax_t)mb > SIZE_MAX / bytes_per_mib) {
+        printf("status: FAILED\nerror: buffer size too large\n");
+        return 1;
+    }
 
-    size_t n = (size_t)mb << 20 >> 3;        /* 8-byte elements */
-    uint64_t *buf = malloc(n * sizeof *buf);
-    if (!buf) { printf("status: FAILED\nerror: allocation\n"); return 1; }
-    for (size_t i = 0; i < n; i++) buf[i] = i;
+    size_t bytes = (size_t)mb * bytes_per_mib;
+    size_t *next = malloc(bytes);
+    if (!next) { printf("status: FAILED\nerror: allocation\n"); return 1; }
+    size_t n = bytes / sizeof *next;
 
-    uint64_t acc = 0;
+    /* Splice each new index after a pseudorandom member of the same ring. */
+    uint64_t state = seed;
+    next[0] = 0;
+    for (size_t i = 1; i < n; i++) {
+        state = state * 6364136223846793005ULL + 1;
+        size_t after = (state ^ (state >> 32)) % i;
+        next[i] = next[after];
+        next[after] = i;
+    }
+
+    size_t index = 0;
     double t0 = now_us();
     for (int it = 0; it < iters; it++) {
-        /* ------------------------------------------------------------------
-         * YOUR CODE GOES HERE. The placeholder below is a plain sum: loads
-         * that do not depend on each other, from a buffer that fits in cache.
-         * ---------------------------------------------------------------- */
-        for (size_t i = 0; i < n; i++)
-            acc += buf[i];
+        /* Stop one link short of a full lap so the fingerprint advances. */
+        for (size_t i = 1; i < n; i++)
+            index = next[index];
     }
     double us = now_us() - t0;
 
@@ -69,7 +78,7 @@ int main(int argc, char **argv) {
     printf("mean_us: %.1f\n", us / iters);     /* per iteration */
     printf("wall_us: %.1f\n", us);
     printf("flop: 0\n");
-    printf("fingerprint: %llu\n", (unsigned long long)acc);
-    free(buf);
+    printf("fingerprint: %zu\n", index);
+    free(next);
     return 0;
 }
